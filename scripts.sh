@@ -7,5 +7,5 @@ sudo apt-get update
 sudo apt-get install -y sysbench
 
 # Run sysbench
-sysbench cpu --cpu-max-prime=20000 run > /tmp/sysbench_output.txt
+sysbench cpu --cpu-max-prime=5000 run > /tmp/sysbench_output.txt
 
