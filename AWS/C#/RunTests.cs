@@ -37,15 +37,15 @@ namespace EC2SysbenchTest
             Console.WriteLine("Waiting for the server to be ready...");
             await Task.Delay(60000);  // Wait for 60 seconds
             
-            /*
+            
             // 3. Run the sysbench tests on the instance via SSM
-            string command = "sudo apt-get update -y && sudo apt-get install -y sysbench && " +
-                             "sysbench --test=cpu run && " +
-                             "sysbench --test=memory run && " +
-                             "sysbench --test=fileio --file-test-mode=seqwr run";
-            */
+            string command = "sudo apt-get update -y /dev/null 2>&1 && sudo apt-get install -y sysbench /dev/null 2>&1 && " +
+                             "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
+                             "sysbench --test=memory run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
+                             "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'";
             
             
+            /*
             string command = "sudo apt-get update > /dev/null 2>&1 && " +
                  "sudo apt-get install sysbench -y > /dev/null 2>&1 && " +
                  "cpu_time=$(sysbench cpu --cpu-max-prime=20000 --time=0 --events=2000 run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//') && " +
@@ -56,7 +56,7 @@ namespace EC2SysbenchTest
                  "echo $cpu_time && " +
                  "echo $memory_time && " +
                  "echo $fileio_time";
-            
+            */
 
             string output = await RunCommandOnInstance(ssmClient, instanceId, command);
             
