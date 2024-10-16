@@ -15,12 +15,13 @@ namespace EC2SysbenchTest
         static async Task Main(string[] args)
         {
             // Variables
-            string instanceId = "i-0627a7f1baf6aa82f";  // Will be updated after instance launch
+            string instanceId = "";  // Will be updated after instance launch
             string amiId = "ami-08012c0a9ee8e21c4";
             string securityGroupId = "sg-0247592d9fd24ae7a";
             string keyPair = "my-key-pair";
             string subnetId = "subnet-04cd33806b21ff6e8";
-            string localSavePath = "/home/pt/Courses/Cloud/C#/AWS/ManageInstance/Tests/";
+            string localSavePath = Path.Combine("Tests");
+                
             string iamRole = "EnablesEC2ToAccessSystemsManagerRole";
             string filePath = Path.Combine(localSavePath, "sysbench_outputs.txt");
 
