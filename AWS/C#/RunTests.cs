@@ -1,4 +1,4 @@
-﻿using Amazon;
+using Amazon;
 using Amazon.EC2;
 using Amazon.EC2.Model;
 using Amazon.SimpleSystemsManagement;
@@ -15,13 +15,12 @@ namespace EC2SysbenchTest
         static async Task Main(string[] args)
         {
             // Variables
-            string instanceId = "";  // Will be updated after instance launch
+            List<string> instanceIds = new List<string>();  // Stores all instance IDs
             string amiId = "ami-08012c0a9ee8e21c4";
             string securityGroupId = "sg-0247592d9fd24ae7a";
             string keyPair = "my-key-pair";
             string subnetId = "subnet-04cd33806b21ff6e8";
             string localSavePath = Path.Combine("Tests");
-                
             string iamRole = "EnablesEC2ToAccessSystemsManagerRole";
             string filePath = Path.Combine(localSavePath, "sysbench_outputs.txt");
 
@@ -29,17 +28,19 @@ namespace EC2SysbenchTest
             var region = RegionEndpoint.USWest1;
             var ec2Client = new AmazonEC2Client(region);
             var ssmClient = new AmazonSimpleSystemsManagementClient(region);
+            var ssmClient2 = new AmazonSimpleSystemsManagementClient(region);
+            var ssmClient3 = new AmazonSimpleSystemsManagementClient(region);
 
             // 1. Launch the EC2 instance and capture the instanceId
-            instanceId = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole);
+            instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole);
 
             // 2. Wait for the instance to be ready
             Console.WriteLine("Waiting for the server to be ready...");
-            await Task.Delay(60000);  // Wait for 60 seconds
+            await Task.Delay(180000);  // Wait for 60 seconds
             
             
             // 3. Run the sysbench tests on the instance via SSM
-            string command = "sudo apt-get update -y /dev/null 2>&1 && sudo apt-get install -y sysbench /dev/null 2>&1 && " +
+            string command = "sudo apt-get update -y > /dev/null 2>&1 && sudo apt-get install -y sysbench > /dev/null 2>&1 && " +
                              "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
                              "sysbench --test=memory run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
                              "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'";
@@ -58,26 +59,66 @@ namespace EC2SysbenchTest
                  "echo $fileio_time";
             */
 
-            string output = await RunCommandOnInstance(ssmClient, instanceId, command);
-            
+            List<string> allOutputs = new List<string>();
 
-            File.WriteAllText(filePath, output);
+            /*
+            foreach (var instanceId in instanceIds)
+            {
+                Console.WriteLine($"Running sysbench on instance {instanceId}...");
+                
+                // Run the command on this instance
+                string output = await RunCommandOnInstance(ssmClient, instanceId, command);
+                
+                // Collect output
+                allOutputs.Add($"Instance {instanceId} Output:\n{output}");
+                Console.WriteLine("Waiting for the server to be ready...");
+                await Task.Delay(30000);
+            }
+            */
+
+            foreach (var instanceId in instanceIds)
+            {
+                // Check if the instance is ready for SSM
+                Console.WriteLine($"Checking if instance {instanceId} is ready for SSM commands...");
+                bool isReady = await IsSSMReady(ec2Client, ssmClient, instanceId);
+                
+                if (!isReady)
+                {
+                    Console.WriteLine($"Instance {instanceId} is not ready. Skipping...");
+                    continue;
+                }
+
+                Console.WriteLine($"Instance {instanceId} is ready. Running sysbench...");
+
+                // Run the command on this instance
+                string output = await RunCommandOnInstance(ssmClient, instanceId, command);
+
+                // Collect output
+                allOutputs.Add($"Instance {instanceId} Output:\n{output}");
+
+                // Wait for a while before moving on to the next instance (if needed)
+                Console.WriteLine("Waiting before moving to the next instance...");
+                await Task.Delay(60000);
+            }
+                    
+            File.WriteAllLines(filePath, allOutputs);
 
             // 4. Terminate the instance
-            await TerminateInstance(ec2Client, instanceId);
+            await TerminateInstances(ec2Client, instanceIds);
         }
 
         // Function to launch the EC2 instance using AWS SDK and return the instanceId
-        static async Task<string> LaunchInstance(IAmazonEC2 ec2Client, string amiId, string securityGroupId, string keyPair, string subnetId, string iamInstanceProfileName)
+        
+        static async Task<List<string>> LaunchInstance(IAmazonEC2 ec2Client, string amiId, string securityGroupId, string keyPair, string subnetId, string iamInstanceProfileName)
         {
-            Console.WriteLine("Launching the instance...");
+            Console.WriteLine("Launching the instances...");
 
             var request = new RunInstancesRequest
             {
                 ImageId = amiId,
                 InstanceType = InstanceType.T2Micro,  // Adjust the instance type as needed
                 MinCount = 1,
-                MaxCount = 1,
+                MaxCount = 3,  // Launch multiple instances
                 KeyName = keyPair,
                 IamInstanceProfile = new IamInstanceProfileSpecification { Name = iamInstanceProfileName }
             };
@@ -101,31 +142,36 @@ namespace EC2SysbenchTest
             }
 
             var response = await ec2Client.RunInstancesAsync(request);
-            var instance = response.Reservation.Instances[0];
-            string instanceId = instance.InstanceId;  // Set the instanceId locally
+            List<string> instanceIds = new List<string>();
 
-            Console.WriteLine($"Instance {instanceId} launched successfully.");
-            Console.WriteLine($"Public IP: {instance.PublicIpAddress}, Public DNS: {instance.PublicDnsName}");
+            foreach (var instance in response.Reservation.Instances)
+            {
+                instanceIds.Add(instance.InstanceId);
+                Console.WriteLine($"Instance {instance.InstanceId} launched successfully.");
+                Console.WriteLine($"Public IP: {instance.PublicIpAddress}, Public DNS: {instance.PublicDnsName}");
 
-            // Save instance ID and IP address to files if needed
-            File.WriteAllText("instanceIP.txt", instance.PublicIpAddress);
-            File.WriteAllText("instanceID.txt", instanceId);
+                // Save instance ID and IP address to files if needed
+                File.WriteAllText($"instanceIP_{instance.InstanceId}.txt", instance.PublicIpAddress); //may be an issue. Forgot if we still use text files to retrieve both of these values
+                File.WriteAllText($"instanceID_{instance.InstanceId}.txt", instance.InstanceId);
+            }
 
-            return instanceId;  // Return the instanceId
+            return instanceIds;  // Return the list of instance IDs
         }
 
         // Function to terminate the EC2 instance using AWS SDK
-        static async Task TerminateInstance(IAmazonEC2 ec2Client, string instanceId)
+        static async Task TerminateInstances(IAmazonEC2 ec2Client, List<string> instanceIds)
         {
-            Console.WriteLine($"Terminating instance: {instanceId}");
+            Console.WriteLine($"Terminating instances: {string.Join(", ", instanceIds)}");
             var terminateRequest = new TerminateInstancesRequest
             {
-                InstanceIds = new List<string> { instanceId }
+                InstanceIds = instanceIds  // Pass the list of instance IDs
             };
             var response = await ec2Client.TerminateInstancesAsync(terminateRequest);
 
-            var terminatedInstance = response.TerminatingInstances[0];
-            Console.WriteLine($"Instance {terminatedInstance.InstanceId} terminated successfully with current state: {terminatedInstance.CurrentState.Name}");
+            foreach (var terminatedInstance in response.TerminatingInstances)
+            {
+                Console.WriteLine($"Instance {terminatedInstance.InstanceId} terminated successfully with current state: {terminatedInstance.CurrentState.Name}");
+            }
         }
 
         // Run a command on the EC2 instance via SSM
@@ -182,6 +228,37 @@ namespace EC2SysbenchTest
                 await Task.Delay(5000);  // Wait 5 seconds before checking again
             }
         }
+
+        static async Task<bool> IsSSMReady(IAmazonEC2 ec2Client, IAmazonSimpleSystemsManagement ssmClient, string instanceId)
+        {
+            var describeInstanceStatusRequest = new DescribeInstanceStatusRequest
+            {
+                InstanceIds = new List<string> { instanceId },
+                IncludeAllInstances = true
+            };
+
+            var describeInstanceStatusResponse = await ec2Client.DescribeInstanceStatusAsync(describeInstanceStatusRequest);
+            var instanceStatus = describeInstanceStatusResponse.InstanceStatuses.FirstOrDefault();
+
+            if (instanceStatus != null &&
+                instanceStatus.InstanceState.Name == "running" && 
+                instanceStatus.SystemStatus.Status == "ok")
+            {
+                // Check SSM agent status
+                var commandStatus = await ssmClient.ListCommandsAsync(new ListCommandsRequest
+                {
+                    Filters = new List<CommandFilter>
+                    {
+                        new CommandFilter { Key = "InstanceId", Value = instanceId }
+                    } //CHECKPOINT: Use "Value" instead of "Values". Read documentation for errors GPT is giving
+                });
+                
+                return commandStatus.Commands.Any();
+            }
+
+            return false;
+        }
+
 
         /*
         static async Task WaitForInstanceToBeReady(IAmazonEC2 ec2Client, string instanceId)
