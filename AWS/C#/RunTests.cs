@@ -36,8 +36,7 @@ namespace EC2SysbenchTest
             string iamRole = config.iamRole;
             int totalInstances = config.totalInstances;
 
-            string localSavePath = Path.Combine("Tests");
-            string filePath = Path.Combine(localSavePath, "sysbench_outputs.txt");
+            string filePath = Path.Combine("sysbench_outputs.txt");
             List<string> instanceIds = new List<string>();
 
             Console.WriteLine(amiId);
