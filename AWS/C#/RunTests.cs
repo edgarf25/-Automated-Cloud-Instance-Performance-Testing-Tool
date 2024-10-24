@@ -36,17 +36,19 @@ namespace EC2SysbenchTest
 
             // 2. Wait for the instance to be ready
             Console.WriteLine("Waiting for the server to be ready...");
-            await Task.Delay(180000);  // Wait for 60 seconds
+            await Task.Delay(360000);  // Wait for 60 seconds
             
             
             // 3. Run the sysbench tests on the instance via SSM
+            /*
             string command = "sudo apt-get update -y > /dev/null 2>&1 && sudo apt-get install -y sysbench > /dev/null 2>&1 && " +
                              "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
                              "sysbench --test=memory run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
                              "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'";
+            */
             
             
-            /*
+            
             string command = "sudo apt-get update > /dev/null 2>&1 && " +
                  "sudo apt-get install sysbench -y > /dev/null 2>&1 && " +
                  "cpu_time=$(sysbench cpu --cpu-max-prime=20000 --time=0 --events=2000 run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//') && " +
@@ -57,7 +59,7 @@ namespace EC2SysbenchTest
                  "echo $cpu_time && " +
                  "echo $memory_time && " +
                  "echo $fileio_time";
-            */
+            
 
             List<string> allOutputs = new List<string>();
 
@@ -98,7 +100,7 @@ namespace EC2SysbenchTest
 
                 // Wait for a while before moving on to the next instance (if needed)
                 Console.WriteLine("Waiting before moving to the next instance...");
-                await Task.Delay(60000);
+                await Task.Delay(5000);
             }
                     
             File.WriteAllLines(filePath, allOutputs);
@@ -118,7 +120,7 @@ namespace EC2SysbenchTest
                 ImageId = amiId,
                 InstanceType = InstanceType.T2Micro,  // Adjust the instance type as needed
                 MinCount = 1,
-                MaxCount = 3,  // Launch multiple instances
+                MaxCount = 5,  // Launch multiple instances
                 KeyName = keyPair,
                 IamInstanceProfile = new IamInstanceProfileSpecification { Name = iamInstanceProfileName }
             };
@@ -151,8 +153,8 @@ namespace EC2SysbenchTest
                 Console.WriteLine($"Public IP: {instance.PublicIpAddress}, Public DNS: {instance.PublicDnsName}");
 
                 // Save instance ID and IP address to files if needed
-                File.WriteAllText($"instanceIP_{instance.InstanceId}.txt", instance.PublicIpAddress); //may be an issue. Forgot if we still use text files to retrieve both of these values
-                File.WriteAllText($"instanceID_{instance.InstanceId}.txt", instance.InstanceId);
+                //File.WriteAllText($"instanceIP_{instance.InstanceId}.txt", instance.PublicIpAddress); 
+                //File.WriteAllText($"instanceID_{instance.InstanceId}.txt", instance.InstanceId);
             }
 
             return instanceIds;  // Return the list of instance IDs
