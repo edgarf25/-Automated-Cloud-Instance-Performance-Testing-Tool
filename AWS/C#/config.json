@@ -1,0 +1,8 @@
+{
+  "amiId": "ami-08012c0a9ee8e21c4",
+  "securityGroupId": "sg-0247592d9fd24ae7a",
+  "keyPair": "my-key-pair",
+  "subnetId": "subnet-04cd33806b21ff6e8",
+  "iamRole": "EnablesEC2ToAccessSystemsManagerRole",
+  "totalInstances": 5
+}
