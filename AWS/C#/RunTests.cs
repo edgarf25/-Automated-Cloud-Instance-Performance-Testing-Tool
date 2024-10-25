@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Text.Json;
+using MongoDB.Driver;
 
 namespace EC2SysbenchTest
 {
@@ -34,7 +35,9 @@ namespace EC2SysbenchTest
             string keyPair = config.keyPair;
             string subnetId = config.subnetId;
             string iamRole = config.iamRole;
+            string instanceType = "t2.micro";   
             int totalInstances = config.totalInstances;
+            var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
             string filePath = Path.Combine("sysbench_outputs.txt");
             List<string> instanceIds = new List<string>();
@@ -48,12 +51,14 @@ namespace EC2SysbenchTest
     
             // 1. Launching the EC2 instance and obtaining instanceId
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances);
+            //instanceIds.Add("i-08048cd335ae939be");
 
             // 2. Giving time for the instances to be ready
             Console.WriteLine("Waiting for the server to be ready...");
-            await Task.Delay(30000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
+            await Task.Delay(120000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
             
             // 3. Running sysbench tests on the instance through SSM
+            
             /*
             string command = "sudo apt-get update -y > /dev/null 2>&1 && sudo apt-get install -y sysbench > /dev/null 2>&1 && " +
                              "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
@@ -71,6 +76,7 @@ namespace EC2SysbenchTest
                  "echo $cpu_time && " +
                  "echo $memory_time && " +
                  "echo $fileio_time";
+            
 
             List<string> allOutputs = new List<string>();
             
@@ -86,10 +92,42 @@ namespace EC2SysbenchTest
                     continue;
                 }
 
+                var request = new DescribeInstanceTypesRequest
+                {
+                    InstanceTypes = new List<string> { instanceType }
+                };
+
+                var response = await ec2Client.DescribeInstanceTypesAsync(request);
+                var instanceTypeInfo = response.InstanceTypes.FirstOrDefault();
+
                 Console.WriteLine($"Instance {instanceId} is ready. Running sysbench...");
 
                 // Run the command on this instance
                 string output = await RunCommandOnInstance(ssmClient, instanceId, command);
+
+                string[] results = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+                double totalTime = cpuTime + memoryTime + fileIOTime;
+
+                var data = new CloudPerformanceData
+                {
+                    Provider = "AWS",
+                    VmSize = instanceTypeInfo.MemoryInfo.SizeInMiB,
+                    Location = region.SystemName,
+                    CPU = double.Parse(results[0]),
+                    Memory = double.Parse(results[1]),
+                    Disk = double.Parse(results[2]),
+                    totalTime = totalTime.ToString(),
+                    Os = "Ubuntu 18.04",
+                    Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
+                };
+
+                cloudPerformanceData.InsertData(data);
+
+                Console.WriteLine($"CPU Time: {cpuTime}");
+                Console.WriteLine($"Memory Time: {memoryTime}");
+                Console.WriteLine($"File I/O Time: {fileIOTime}");
+                Console.WriteLine($"Total Time: {totalTime}");
 
                 // Collect output
                 allOutputs.Add($"Instance {instanceId} Output:\n{output}");
