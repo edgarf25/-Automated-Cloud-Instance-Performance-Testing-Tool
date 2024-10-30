@@ -9,11 +9,13 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Text.Json;
 using MongoDB.Driver;
+using MongoDbAtlasService;
 
 namespace EC2SysbenchTest
 {
     class Program
     {
+        private const string connectionString = "";
         public class Config
         {
             public string amiId { get; set; }
@@ -77,7 +79,6 @@ namespace EC2SysbenchTest
                  "echo $memory_time && " +
                  "echo $fileio_time";
             
-
             List<string> allOutputs = new List<string>();
             
             foreach (var instanceId in instanceIds)
@@ -107,16 +108,20 @@ namespace EC2SysbenchTest
 
                 string[] results = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
+                var cpuTime = double.Parse(results[0]);
+                var memoryTime = double.Parse(results[1]);
+                var fileIOTime = double.Parse(results[2]);
+
                 double totalTime = cpuTime + memoryTime + fileIOTime;
 
                 var data = new CloudPerformanceData
                 {
                     Provider = "AWS",
-                    VmSize = instanceTypeInfo.MemoryInfo.SizeInMiB,
+                    VmSize = instanceType,
                     Location = region.SystemName,
-                    CPU = double.Parse(results[0]),
-                    Memory = double.Parse(results[1]),
-                    Disk = double.Parse(results[2]),
+                    CPU = cpuTime.ToString(),
+                    Memory = memoryTime.ToString(),
+                    Disk = fileIOTime.ToString(),
                     totalTime = totalTime.ToString(),
                     Os = "Ubuntu 18.04",
                     Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")

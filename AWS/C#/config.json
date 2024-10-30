@@ -4,5 +4,5 @@
   "keyPair": "my-key-pair",
   "subnetId": "subnet-04cd33806b21ff6e8",
   "iamRole": "EnablesEC2ToAccessSystemsManagerRole",
-  "totalInstances": 2
+  "totalInstances": 1
 }
