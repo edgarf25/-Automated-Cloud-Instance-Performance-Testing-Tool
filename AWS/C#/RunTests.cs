@@ -39,7 +39,7 @@ namespace EC2SysbenchTest
             string iamRole = config.iamRole;
             string instanceType = "t2.micro";   
             int totalInstances = config.totalInstances;
-            var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
+            //var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
             string filePath = Path.Combine("sysbench_outputs.txt");
             List<string> instanceIds = new List<string>();
@@ -57,7 +57,7 @@ namespace EC2SysbenchTest
 
             // 2. Giving time for the instances to be ready
             Console.WriteLine("Waiting for the server to be ready...");
-            await Task.Delay(120000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
+            await Task.Delay(180000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
             
             // 3. Running sysbench tests on the instance through SSM
             
@@ -83,14 +83,28 @@ namespace EC2SysbenchTest
             
             foreach (var instanceId in instanceIds)
             {
-                // Check if the instance is ready for SSM
                 Console.WriteLine($"Checking if instance {instanceId} is ready for SSM commands...");
-                bool isReady = await IsSSMReady(ec2Client, ssmClient, instanceId);
-                
+
+                bool isReady = false;
+                int retryCount = 0;
+                int maxRetries = 30; // Set a maximum retry limit to avoid infinite loops
+
+                while (!isReady && retryCount < maxRetries)
+                {
+                    isReady = await IsSSMReady(ec2Client, ssmClient, instanceId);
+
+                    if (!isReady)
+                    {
+                        retryCount++;
+                        Console.WriteLine($"Instance {instanceId} is not ready. Retrying in 5 seconds... (Attempt {retryCount}/{maxRetries})");
+                        await Task.Delay(5000); // Wait for 5 seconds before retrying
+                    }
+                }
+
                 if (!isReady)
                 {
-                    Console.WriteLine($"Instance {instanceId} is not ready. Skipping...");
-                    continue;
+                    Console.WriteLine($"Instance {instanceId} could not be made ready after {maxRetries} attempts. Skipping...");
+                    continue; // Skip if the instance still isn't ready after maximum retries
                 }
 
                 var request = new DescribeInstanceTypesRequest
@@ -127,7 +141,7 @@ namespace EC2SysbenchTest
                     Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                 };
 
-                cloudPerformanceData.InsertData(data);
+                //cloudPerformanceData.InsertData(data); //send data to DB
 
                 Console.WriteLine($"CPU Time: {cpuTime}");
                 Console.WriteLine($"Memory Time: {memoryTime}");
@@ -141,6 +155,7 @@ namespace EC2SysbenchTest
                 Console.WriteLine("Waiting before moving to the next instance...");
                 await Task.Delay(5000);
             }
+
                     
             File.WriteAllLines(filePath, allOutputs);
 
@@ -244,33 +259,55 @@ namespace EC2SysbenchTest
 
         static async Task<string> WaitForCommandToComplete(IAmazonSimpleSystemsManagement ssmClient, string commandId, string instanceId)
         {
-            while (true)
+            int delayBeforeFirstAttempt = 2000; // Delay in milliseconds (2 seconds)
+            int maxRetries = 30;   // Maximum number of retry attempts
+            int delayBetweenRetries = 5000; // Delay in milliseconds between retries (5 seconds)
+            int retryCount = 0;
+
+            // Initial delay before first status check
+            await Task.Delay(delayBeforeFirstAttempt);
+
+            while (retryCount < maxRetries)
             {
-                var commandInvocationRequest = new GetCommandInvocationRequest
+                try
                 {
-                    CommandId = commandId,
-                    InstanceId = instanceId
-                };
+                    var commandInvocationRequest = new GetCommandInvocationRequest
+                    {
+                        CommandId = commandId,
+                        InstanceId = instanceId
+                    };
 
-                var response = await ssmClient.GetCommandInvocationAsync(commandInvocationRequest);
+                    var response = await ssmClient.GetCommandInvocationAsync(commandInvocationRequest);
 
-                if (response.Status == CommandInvocationStatus.Success)
-                {
-                    Console.WriteLine("Command execution completed successfully.");
-                    string output = response.StandardOutputContent;
-                    Console.WriteLine($"Output:\n{output}");
-                    return output;  // Return the output
+                    if (response.Status == CommandInvocationStatus.Success)
+                    {
+                        Console.WriteLine("Command execution completed successfully.");
+                        string output = response.StandardOutputContent;
+                        Console.WriteLine($"Output:\n{output}");
+                        return output;  // Return the output
+                    }
+                    else if (response.Status == CommandInvocationStatus.Failed)
+                    {
+                        Console.WriteLine($"Command failed: {response.StandardErrorContent}");
+                        return response.StandardErrorContent;  // Return the error output
+                    }
+
+                    Console.WriteLine("Waiting for command to complete...");
+                    await Task.Delay(delayBetweenRetries); // Wait before checking again
                 }
-                else if (response.Status == CommandInvocationStatus.Failed)
+                catch (Amazon.SimpleSystemsManagement.Model.InvocationDoesNotExistException)
                 {
-                    Console.WriteLine($"Command failed: {response.StandardErrorContent}");
-                    return response.StandardErrorContent;  // Return the error output
+                    // Log the exception, but keep retrying up to maxRetries
+                    Console.WriteLine($"Invocation does not exist. Retrying... ({retryCount + 1}/{maxRetries})");
+                    await Task.Delay(delayBetweenRetries);
                 }
 
-                Console.WriteLine("Waiting for command to complete...");
-                await Task.Delay(5000);  // Wait 5 seconds before checking again
+                retryCount++;
             }
+
+            throw new Exception("Command did not complete within the maximum number of retries.");
         }
+
 
         static async Task<bool> IsSSMReady(IAmazonEC2 ec2Client, IAmazonSimpleSystemsManagement ssmClient, string instanceId)
         {
