@@ -1,4 +1,7 @@
-﻿using Microsoft.Azure.Management.Compute;
+﻿// Program.cs
+using System.Globalization;
+using System.Text.Json;
+using Microsoft.Azure.Management.Compute;
 using Microsoft.Azure.Management.Compute.Models;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Models;
@@ -6,93 +9,182 @@ using Microsoft.Azure.Management.ResourceManager;
 using Microsoft.Azure.Management.ResourceManager.Models;
 using Microsoft.Rest;
 using Microsoft.Rest.Azure;
-using System.Globalization;
-
+using MongoDbAtlasService;
 
 class Program
 {
-    private static string subscriptionId = "GET ID AND REPLACE";
-    private static string resourceGroupName = "myResourceGroupAutomation";
-    private static string vmName = "myVM";
-    private static string location = "westus";
-    private static string virtualNetworkName = "myVNet";
-    private static string subnetName = "mySubnet";
-    private static string publicIpName = "myPublicIP";
-    private static string networkInterfaceName = "myNIC";
-    private static string osDiskName = "myOsDisk";
-
-    static async Task Main(string[] args)
+    private const string connectionString = "MY_CONNECTION_STRING";
+    public static async Task Run(string[] args)
     {
-        // Authenticate using the access token
+        // Replace with your Azure subscription ID
+        string subscriptionId = "MY_SUBSCRIPTION_ID";
+
+        // Getting the access token once
         string accessToken = await TokenService.GetAccessTokenAsync();
         var tokenCredentials = new TokenCredentials(accessToken);
 
-        // Create the Resource Group
+        // Read and parse the JSON configuration file
+        string configFilePath = "vmConfigurations.json";
+        var vmConfigurations = await LoadVmConfigurationsAsync(configFilePath);
+
+        // Check if vmConfigurations is null
+        if (vmConfigurations == null)
+        {
+            Console.WriteLine("vmConfigurations is null.");
+            return;
+        }
+
+        // Check if vmConfigurations.Vms is null
+        if (vmConfigurations.Vms == null)
+        {
+            Console.WriteLine("vmConfigurations.Vms is null.");
+            return;
+        }
+
+        // Check if vmConfigurations.Vms has any items
+        if (vmConfigurations.Vms.Count == 0)
+        {
+            Console.WriteLine("vmConfigurations.Vms is empty.");
+            return;
+        }
+
+        // Iterate over all VM configurations
+        foreach (var vmConfig in vmConfigurations.Vms)
+        {
+            try
+            {
+                Console.WriteLine($"Processing VM configuration: {vmConfig.Name}");
+                await CreateAndManageVmAsync(vmConfig, tokenCredentials, subscriptionId);
+                Console.WriteLine($"Finished processing VM: {vmConfig.Name}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred while processing VM '{vmConfig.Name}': {ex.Message}");
+            }
+        }
+
+        Console.WriteLine("All VMs have been processed.");
+    }
+
+    // Function to load the VM configurations from the JSON file
+    private static async Task<VmConfigurations?> LoadVmConfigurationsAsync(string filePath)
+    {
+        try
+        {
+            string fullPath = Path.GetFullPath(filePath);
+
+            // Read the file content
+            string jsonString = await File.ReadAllTextAsync(filePath);
+            //Console.WriteLine("Configuration file content:");
+            //Console.WriteLine(jsonString);
+
+            // Deserialize the JSON content
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            var vmConfigurations = JsonSerializer.Deserialize<VmConfigurations>(jsonString, options);
+
+            if (vmConfigurations == null)
+            {
+                //Console.WriteLine("Deserialization returned null.");
+            }
+            else
+            {
+                Console.WriteLine("Successfully loaded JSON configuration file.");
+                Console.WriteLine($"Number of VMs: {vmConfigurations.Vms?.Count ?? 0}");
+            }
+
+            return vmConfigurations;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading or deserializing configuration file '{filePath}': {ex.Message}");
+            return null;
+        }
+    }
+
+
+    // Function to create and manage the VM using the selected configuration
+    private static async Task CreateAndManageVmAsync(VmConfiguration vmConfig, TokenCredentials tokenCredentials, string subscriptionId)
+    {
         var resourceClient = new ResourceManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
-        await resourceClient.ResourceGroups.CreateOrUpdateAsync(resourceGroupName, new ResourceGroup(location));
+        var networkClient = new NetworkManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
+        var computeClient = new ComputeManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
+
+        // Create the Resource Group
+        await resourceClient.ResourceGroups.CreateOrUpdateAsync(vmConfig.ResourceGroupName, new ResourceGroup(vmConfig.Location));
 
         // Create network resources for the VM
-        var networkClient = new NetworkManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
-        var virtualNetwork = await CreateVirtualNetworkAsync(networkClient, resourceGroupName, location);
-        var subnet = virtualNetwork.Subnets[0];
-        var publicIp = await CreatePublicIPAddressAsync(networkClient, resourceGroupName, location);
-        var networkInterface = await CreateNetworkInterfaceAsync(networkClient, resourceGroupName, location, subnet, publicIp);
+        var virtualNetwork = await CreateVirtualNetworkAsync(networkClient, vmConfig);
+        var subnet = virtualNetwork.Subnets.FirstOrDefault(s => s.Name == vmConfig.Network.SubnetName);
+        if (subnet == null)
+        {
+            Console.WriteLine("Failed to retrieve subnet.");
+            return;
+        }
+        var publicIp = await CreatePublicIPAddressAsync(networkClient, vmConfig);
+        var networkInterface = await CreateNetworkInterfaceAsync(networkClient, vmConfig, subnet, publicIp);
 
         // Create the VM
-        var computeClient = new ComputeManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
-        var vm = await CreateVirtualMachineAsync(computeClient, resourceGroupName, location, networkInterface, vmName);
+        var vm = await CreateVirtualMachineAsync(computeClient, vmConfig, networkInterface);
 
         // Wait for the VM to be fully provisioned
-        await WaitForVmProvisioningAsync(computeClient, resourceGroupName, vmName);
+        await WaitForVmProvisioningAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.Name);
 
         // Run commands on the VM
-        string resultMessage = await RunCommandOnVmAsync(computeClient, resourceGroupName, vmName);
+        string resultMessage = await RunCommandOnVmAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.Name, vmConfig);
         Console.WriteLine(resultMessage);
 
-        Console.WriteLine("VM created and commands have been executed.");
+        Console.WriteLine($"VM '{vmConfig.Name}' created and commands have been executed.");
 
         // Delete resources after tests
-        await DeleteResourcesAsync(computeClient, networkClient, resourceClient, resourceGroupName, vmName);
-        Console.WriteLine("Resources have been deleted.");
+        await DeleteResourcesAsync(computeClient, networkClient, resourceClient, vmConfig);
+
+        Console.WriteLine($"Resources for VM '{vmConfig.Name}' have been deleted.");
     }
 
     // Function to create a virtual network
-    private static async Task<VirtualNetwork> CreateVirtualNetworkAsync(NetworkManagementClient networkClient, string resourceGroupName, string location)
+    private static async Task<VirtualNetwork> CreateVirtualNetworkAsync(NetworkManagementClient networkClient, VmConfiguration vmConfig)
     {
         var vnetParams = new VirtualNetwork
         {
-            Location = location,
-            AddressSpace = new AddressSpace { AddressPrefixes = new[] { "10.0.0.0/16" } },
-            Subnets = new[] { new Subnet { Name = subnetName, AddressPrefix = "10.0.0.0/24" } }
+            Location = vmConfig.Location,
+            AddressSpace = new AddressSpace { AddressPrefixes = new[] { vmConfig.Network.AddressPrefix } },
+            Subnets = new[]
+            {
+                new Subnet
+                {
+                    Name = vmConfig.Network.SubnetName,
+                    AddressPrefix = vmConfig.Network.SubnetPrefix
+                }
+            }
         };
-        Console.WriteLine("Successfully created virtual network");
-        return await networkClient.VirtualNetworks.CreateOrUpdateAsync(resourceGroupName, virtualNetworkName, vnetParams);
+        Console.WriteLine("Creating virtual network...");
+        return await networkClient.VirtualNetworks.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.Network.VirtualNetworkName, vnetParams);
     }
 
-
     // Function to create a public IP address
-    private static async Task<PublicIPAddress> CreatePublicIPAddressAsync(NetworkManagementClient networkClient, string resourceGroupName, string location)
+    private static async Task<PublicIPAddress> CreatePublicIPAddressAsync(NetworkManagementClient networkClient, VmConfiguration vmConfig)
     {
-        // Below is the name of the DNS label for the public IP address
-        var uniqueDnsLabel = "mydnslabel-" + Guid.NewGuid().ToString().Substring(0, 6);  // Appending a random suffix
+        var uniqueDnsLabel = "mydnslabel-" + Guid.NewGuid().ToString().Substring(0, 6);
 
         var publicIpParams = new PublicIPAddress
         {
-            Location = location,
+            Location = vmConfig.Location,
             PublicIPAllocationMethod = IPAllocationMethod.Dynamic,
             DnsSettings = new PublicIPAddressDnsSettings { DomainNameLabel = uniqueDnsLabel }
         };
-        Console.WriteLine("Successfully created public IP address");
-        return await networkClient.PublicIPAddresses.CreateOrUpdateAsync(resourceGroupName, publicIpName, publicIpParams);
+        Console.WriteLine("Creating public IP address...");
+        return await networkClient.PublicIPAddresses.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.PublicIpName, publicIpParams);
     }
 
-
     // Function to create a network interface
-    private static async Task<NetworkInterface> CreateNetworkInterfaceAsync(NetworkManagementClient networkClient, string resourceGroupName, string location, Subnet subnet, PublicIPAddress publicIp)
+    private static async Task<NetworkInterface> CreateNetworkInterfaceAsync(NetworkManagementClient networkClient, VmConfiguration vmConfig, Subnet subnet, PublicIPAddress publicIp)
     {
         var nicParams = new NetworkInterface
         {
-            Location = location,
+            Location = vmConfig.Location,
             IpConfigurations = new[]
             {
                 new NetworkInterfaceIPConfiguration
@@ -103,26 +195,25 @@ class Program
                 }
             }
         };
-        Console.WriteLine("Successfully created network interface");
-        return await networkClient.NetworkInterfaces.CreateOrUpdateAsync(resourceGroupName, networkInterfaceName, nicParams);
+        Console.WriteLine("Creating network interface...");
+        return await networkClient.NetworkInterfaces.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.NetworkInterfaceName, nicParams);
     }
 
-
     // Function to create a virtual machine
-    private static async Task<VirtualMachine> CreateVirtualMachineAsync(ComputeManagementClient computeClient, string resourceGroupName, string location, NetworkInterface networkInterface, string vmName)
+    private static async Task<VirtualMachine> CreateVirtualMachineAsync(ComputeManagementClient computeClient, VmConfiguration vmConfig, NetworkInterface networkInterface)
     {
         var vmParams = new VirtualMachine
         {
-            Location = location,
+            Location = vmConfig.Location,
             OsProfile = new OSProfile
             {
-                AdminUsername = "USER",    // Define username here
-                AdminPassword = "PASSWORD", // Define password here
-                ComputerName = vmName
+                AdminUsername = vmConfig.AdminUsername,
+                AdminPassword = vmConfig.AdminPassword,
+                ComputerName = vmConfig.Name
             },
             HardwareProfile = new HardwareProfile
             {
-                VmSize = VirtualMachineSizeTypes.StandardB1s // Define VM size here
+                VmSize = vmConfig.VmSize
             },
             NetworkProfile = new Microsoft.Azure.Management.Compute.Models.NetworkProfile
             {
@@ -135,25 +226,24 @@ class Program
             {
                 ImageReference = new ImageReference
                 {
-                    Publisher = "Canonical", // Define publisher here
-                    Offer = "UbuntuServer", // Define offer here
-                    Sku = "18.04-LTS", // Define SKU here
-                    Version = "latest" // Define version here
+                    Publisher = "Canonical",
+                    Offer = "UbuntuServer",
+                    Sku = "18.04-LTS",
+                    Version = "latest"
                 },
                 OsDisk = new OSDisk
                 {
-                    Name = osDiskName,
-                    CreateOption = DiskCreateOptionTypes.FromImage, // Define disk creation option here
-                    ManagedDisk = new ManagedDiskParameters { StorageAccountType = StorageAccountTypes.StandardLRS } // Define storage account type here
+                    Name = vmConfig.OsDiskName,
+                    CreateOption = DiskCreateOptionTypes.FromImage,
+                    ManagedDisk = new ManagedDiskParameters { StorageAccountType = StorageAccountTypes.StandardLRS }
                 }
             }
         };
-        Console.WriteLine("Successfully created virtual machine");
-        return await computeClient.VirtualMachines.CreateOrUpdateAsync(resourceGroupName, vmName, vmParams);
+        Console.WriteLine("Creating virtual machine...");
+        return await computeClient.VirtualMachines.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.Name, vmParams);
     }
 
-
-    //function to wait for VM provisioning
+    // Function to wait for VM provisioning
     private static async Task WaitForVmProvisioningAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName)
     {
         VirtualMachine vm;
@@ -169,14 +259,14 @@ class Program
         } while (true);
     }
 
-
-    // Apply Custom Script Extension to run sysbench
-    private static async Task<string> RunCommandOnVmAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName)
+    // Function to run commands on the VM
+    private static async Task<string> RunCommandOnVmAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName, VmConfiguration vmConfig)
     {
+        Console.WriteLine("Running Tests on VM...");
         var runCommandParams = new RunCommandInput
         {
             CommandId = "RunShellScript",
-            Script = new[] // Commands to run on the VM
+            Script = new[]
             {
                 "sudo apt-get update > /dev/null 2>&1",
                 "sudo apt-get install sysbench -y > /dev/null 2>&1",
@@ -193,18 +283,13 @@ class Program
 
         try
         {
-            var result = await computeClient.VirtualMachines.RunCommandAsync(
-                resourceGroupName, vmName, runCommandParams);
+            var result = await computeClient.VirtualMachines.RunCommandAsync(resourceGroupName, vmName, runCommandParams);
 
             Console.WriteLine("Successfully ran commands on VM");
 
             if (result.Value != null && result.Value.Count > 0)
             {
                 var output = result.Value[0].Message;
-
-                // Printing the raw output for debugging
-                Console.WriteLine("Raw output from VM:");
-                Console.WriteLine(output);
 
                 // Split the output into lines and trim each line
                 var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
@@ -222,10 +307,10 @@ class Program
                     {
                         totalTimes.Add(time);
                     }
-                    // else
-                    // {
-                    //     Console.WriteLine($"Failed to parse line as double: '{line}'");
-                    // }
+                    else
+                    {
+                        //Console.WriteLine($"Failed to parse line as double: '{line}'");
+                    }
                 }
 
                 if (totalTimes.Count == 3)
@@ -234,6 +319,25 @@ class Program
                     Console.WriteLine($"Memory Test Time: {totalTimes[1]} seconds");
                     Console.WriteLine($"File I/O Test Time: {totalTimes[2]} seconds");
                     double totalTime = totalTimes.Sum();
+
+                    //Adding the data to MongoDB
+                    var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
+
+                    var data = new CloudPerformanceData
+                    {
+                        Provider = "Azure",
+                        VmSize = vmConfig.VmSize,
+                        Location = vmConfig.Location,
+                        CPU = totalTimes[0].ToString(),
+                        Memory = totalTimes[1].ToString(),
+                        Disk = totalTimes[2].ToString(),
+                        totalTime = totalTime.ToString(),
+                        Os = "Ubuntu 18.04",
+                        Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
+                    };
+
+                    cloudPerformanceData.InsertData(data);
+                    
                     return $"Total time taken to run all tests: {totalTime} seconds";
                 }
                 else
@@ -261,6 +365,33 @@ class Program
         }
     }
 
+    // Function to delete resources
+    private static async Task DeleteResourcesAsync(
+        ComputeManagementClient computeClient,
+        NetworkManagementClient networkClient,
+        ResourceManagementClient resourceClient,
+        VmConfiguration vmConfig)
+    {
+        // Delete the virtual machine
+        await DeleteVirtualMachineAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.Name);
+
+        // Delete network interface
+        await DeleteNetworkInterfaceAsync(networkClient, vmConfig.ResourceGroupName, vmConfig.NetworkInterfaceName);
+
+        // Delete public IP address
+        await DeletePublicIpAddressAsync(networkClient, vmConfig.ResourceGroupName, vmConfig.PublicIpName);
+
+        // Delete virtual network
+        await DeleteVirtualNetworkAsync(networkClient, vmConfig.ResourceGroupName, vmConfig.Network.VirtualNetworkName);
+
+        // Delete disk
+        await DeleteDiskAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.OsDiskName);
+
+        // Optionally, delete the resource group
+        await DeleteResourceGroupAsync(resourceClient, vmConfig.ResourceGroupName);
+    }
+
+    // Function to delete virtual machine
     private static async Task DeleteVirtualMachineAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName)
     {
         try
@@ -275,6 +406,7 @@ class Program
         }
     }
 
+    // Function to delete network interface
     private static async Task DeleteNetworkInterfaceAsync(NetworkManagementClient networkClient, string resourceGroupName, string networkInterfaceName)
     {
         try
@@ -289,6 +421,7 @@ class Program
         }
     }
 
+    // Function to delete public IP address
     private static async Task DeletePublicIpAddressAsync(NetworkManagementClient networkClient, string resourceGroupName, string publicIpName)
     {
         try
@@ -303,6 +436,7 @@ class Program
         }
     }
 
+    // Function to delete virtual network
     private static async Task DeleteVirtualNetworkAsync(NetworkManagementClient networkClient, string resourceGroupName, string virtualNetworkName)
     {
         try
@@ -317,6 +451,7 @@ class Program
         }
     }
 
+    // Function to delete disk
     private static async Task DeleteDiskAsync(ComputeManagementClient computeClient, string resourceGroupName, string diskName)
     {
         try
@@ -331,6 +466,7 @@ class Program
         }
     }
 
+    // Function to delete resource group
     private static async Task DeleteResourceGroupAsync(ResourceManagementClient resourceClient, string resourceGroupName)
     {
         try
@@ -344,31 +480,4 @@ class Program
             Console.WriteLine($"Error deleting resource group '{resourceGroupName}': {ex.Message}");
         }
     }
-
-    private static async Task DeleteResourcesAsync(
-    ComputeManagementClient computeClient,
-    NetworkManagementClient networkClient,
-    ResourceManagementClient resourceClient,
-    string resourceGroupName,
-    string vmName)
-    {
-        // Delete the virtual machine
-        await DeleteVirtualMachineAsync(computeClient, resourceGroupName, vmName);
-
-        // Delete network interface
-        await DeleteNetworkInterfaceAsync(networkClient, resourceGroupName, networkInterfaceName);
-
-        // Delete public IP address
-        await DeletePublicIpAddressAsync(networkClient, resourceGroupName, publicIpName);
-
-        // Delete virtual network
-        await DeleteVirtualNetworkAsync(networkClient, resourceGroupName, virtualNetworkName);
-
-        // Delete disk
-        await DeleteDiskAsync(computeClient, resourceGroupName, osDiskName);
-
-        // delete the resource group
-        await DeleteResourceGroupAsync(resourceClient, resourceGroupName);
-    }
-
 }
