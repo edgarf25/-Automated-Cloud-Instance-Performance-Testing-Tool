@@ -10,12 +10,12 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using MongoDB.Driver;
 using MongoDbAtlasService;
+using DotNetEnv;
 
 namespace EC2SysbenchTest
 {
     class Program
     {
-        private const string connectionString = "";
         public class Config
         {
             public string amiId { get; set; }
@@ -28,18 +28,25 @@ namespace EC2SysbenchTest
 
         static async Task Main(string[] args)
         {
+            Env.Load();
             // Loading configuration from JSON file
             string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "config.json");
             Config config = LoadConfig(configFilePath);
 
             string amiId = config.amiId;
-            string securityGroupId = config.securityGroupId;
-            string keyPair = config.keyPair;
-            string subnetId = config.subnetId;
-            string iamRole = config.iamRole;
+            string securityGroupId = Environment.GetEnvironmentVariable("AWS_SECURITY_GROUP_ID") ?? throw new InvalidOperationException("AWS_SECURITY_GROUP_ID environment variable is not set."); //this
+            string keyPair = Environment.GetEnvironmentVariable("AWS_KEY_PAIR_NAME") ?? throw new InvalidOperationException("AWS_KEY_PAIR_NAME environment variable is not set."); //this
+            string subnetId = Environment.GetEnvironmentVariable("AWS_SUBNET_ID") ?? throw new InvalidOperationException("AWS_SUBNET_ID environment variable is not set."); //this
+            string iamRole = Environment.GetEnvironmentVariable("AWS_IAM_ROLE") ?? throw new InvalidOperationException("AWS_IAM_ROLE environment variable is not set."); //this
             string instanceType = "t2.micro";   
             int totalInstances = config.totalInstances;
-            //var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
+
+            var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                throw new InvalidOperationException("DB_CONNECTION_STRING environment variable is not set.");
+            }
+            var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
             string filePath = Path.Combine("sysbench_outputs.txt");
             List<string> instanceIds = new List<string>();
@@ -118,7 +125,7 @@ namespace EC2SysbenchTest
                     Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                 };
 
-                //cloudPerformanceData.InsertData(data); //send data to DB
+                cloudPerformanceData.InsertData(data); //send data to DB
 
                 Console.WriteLine($"CPU Time: {cpuTime}");
                 Console.WriteLine($"Memory Time: {memoryTime}");
