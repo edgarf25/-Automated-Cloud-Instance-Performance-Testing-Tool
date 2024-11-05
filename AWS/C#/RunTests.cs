@@ -53,11 +53,10 @@ namespace EC2SysbenchTest
     
             // 1. Launching the EC2 instance and obtaining instanceId
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances);
-            //instanceIds.Add("i-08048cd335ae939be");
 
             // 2. Giving time for the instances to be ready
             Console.WriteLine("Waiting for the server to be ready...");
-            await Task.Delay(180000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
+            await Task.Delay(120000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
             
             // 3. Running sysbench tests on the instance through SSM
             
@@ -84,28 +83,6 @@ namespace EC2SysbenchTest
             foreach (var instanceId in instanceIds)
             {
                 Console.WriteLine($"Checking if instance {instanceId} is ready for SSM commands...");
-
-                bool isReady = false;
-                int retryCount = 0;
-                int maxRetries = 30; // Set a maximum retry limit to avoid infinite loops
-
-                while (!isReady && retryCount < maxRetries)
-                {
-                    isReady = await IsSSMReady(ec2Client, ssmClient, instanceId);
-
-                    if (!isReady)
-                    {
-                        retryCount++;
-                        Console.WriteLine($"Instance {instanceId} is not ready. Retrying in 5 seconds... (Attempt {retryCount}/{maxRetries})");
-                        await Task.Delay(5000); // Wait for 5 seconds before retrying
-                    }
-                }
-
-                if (!isReady)
-                {
-                    Console.WriteLine($"Instance {instanceId} could not be made ready after {maxRetries} attempts. Skipping...");
-                    continue; // Skip if the instance still isn't ready after maximum retries
-                }
 
                 var request = new DescribeInstanceTypesRequest
                 {
@@ -181,9 +158,9 @@ namespace EC2SysbenchTest
             var request = new RunInstancesRequest
             {
                 ImageId = amiId,
-                InstanceType = InstanceType.T2Micro,  // Adjust the instance type as needed
+                InstanceType = InstanceType.T2Micro,  // Instance type
                 MinCount = 1,
-                MaxCount = totalInstances,  // Launch multiple instances
+                MaxCount = totalInstances,  // Number of instances to be launched
                 KeyName = keyPair,
                 IamInstanceProfile = new IamInstanceProfileSpecification { Name = iamInstanceProfileName }
             };
@@ -260,14 +237,14 @@ namespace EC2SysbenchTest
         static async Task<string> WaitForCommandToComplete(IAmazonSimpleSystemsManagement ssmClient, string commandId, string instanceId)
         {
             int delayBeforeFirstAttempt = 2000; // Delay in milliseconds (2 seconds)
-            int maxRetries = 30;   // Maximum number of retry attempts
+            int maxRetries = 30;   // Maximum number of retry attempts. Note: may not be needed anymore
             int delayBetweenRetries = 5000; // Delay in milliseconds between retries (5 seconds)
             int retryCount = 0;
 
             // Initial delay before first status check
             await Task.Delay(delayBeforeFirstAttempt);
 
-            while (retryCount < maxRetries)
+            while (true)
             {
                 try
                 {
