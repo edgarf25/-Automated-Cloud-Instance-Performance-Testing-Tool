@@ -22,8 +22,13 @@
     <PackageReference Include="SSH.NET" Version="2024.1.0" />
   </ItemGroup>
 
-    <!-- Add this ItemGroup to include the vmConfigurations.json file -->
   <ItemGroup>
+    <!-- Add the .env file -->
+    <Content Include=".env">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    
+    <!-- Add the vmConfigurations.json file -->
     <Content Include="vmConfigurations.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
