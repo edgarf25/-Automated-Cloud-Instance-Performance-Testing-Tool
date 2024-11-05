@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.CloudWatch" Version="3.7.401.18" />
     <PackageReference Include="AWSSDK.EC2" Version="3.7.405.8" />
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="Google.Cloud.Compute.V1" Version="2.17.0" />
     <PackageReference Include="Microsoft.Azure.Management.Compute" Version="60.0.0" />
     <PackageReference Include="Microsoft.Azure.Management.Monitor" Version="0.28.0-preview" />

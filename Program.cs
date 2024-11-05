@@ -1,6 +1,7 @@
 ﻿// Program.cs
 using System.Globalization;
 using System.Text.Json;
+using DotNetEnv;
 using Microsoft.Azure.Management.Compute;
 using Microsoft.Azure.Management.Compute.Models;
 using Microsoft.Azure.Management.Network;
@@ -13,11 +14,12 @@ using MongoDbAtlasService;
 
 class Program
 {
-    private const string connectionString = "MY_CONNECTION_STRING";
     public static async Task Run(string[] args)
     {
+        Env.Load(); // Load the .env file
+
         // Replace with your Azure subscription ID
-        string subscriptionId = "MY_SUBSCRIPTION_ID";
+        string subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID") ?? throw new InvalidOperationException("AZURE_SUBSCRIPTION_ID environment variable is not set.");
 
         // Getting the access token once
         string accessToken = await TokenService.GetAccessTokenAsync();
@@ -321,6 +323,11 @@ class Program
                     double totalTime = totalTimes.Sum();
 
                     //Adding the data to MongoDB
+                    var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+                    if (string.IsNullOrEmpty(connectionString))
+                    {
+                        throw new InvalidOperationException("DB_CONNECTION_STRING environment variable is not set.");
+                    }
                     var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
                     var data = new CloudPerformanceData
