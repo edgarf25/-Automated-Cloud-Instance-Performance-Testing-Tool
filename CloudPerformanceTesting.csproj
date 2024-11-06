@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="5.3.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.29.0" />
     <PackageReference Include="SSH.NET" Version="2024.1.0" />
+    <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="3.7.402.12" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +32,11 @@
     
     <!-- Add the vmConfigurations.json file -->
     <Content Include="vmConfigurations.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    
+      <!-- Add the config.json file -->
+    <Content Include="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
