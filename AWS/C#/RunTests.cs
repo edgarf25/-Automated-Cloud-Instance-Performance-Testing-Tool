@@ -14,7 +14,7 @@ using DotNetEnv;
 
 namespace EC2SysbenchTest
 {
-    class Program
+    class AWSProgram
     {
         public class Config
         {
@@ -26,7 +26,7 @@ namespace EC2SysbenchTest
             public int totalInstances { get; set; }
         }
 
-        static async Task Main(string[] args)
+        public static async Task AwsRun(string[] args)
         {
             Env.Load();
             // Loading configuration from JSON file
