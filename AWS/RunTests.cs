@@ -19,10 +19,6 @@ namespace EC2SysbenchTest
         public class Config
         {
             public required string amiId { get; set; }
-            public required string securityGroupId { get; set; }
-            public required string keyPair { get; set; }
-            public required string subnetId { get; set; }
-            public required string iamRole { get; set; }
             public int totalInstances { get; set; }
         }
 
@@ -30,7 +26,7 @@ namespace EC2SysbenchTest
         {
             Env.Load();
             // Loading configuration from JSON file
-            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "config.json");
+            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "AWS" ,"config.json");
             Config config = LoadConfig(configFilePath);
 
             string amiId = config.amiId;

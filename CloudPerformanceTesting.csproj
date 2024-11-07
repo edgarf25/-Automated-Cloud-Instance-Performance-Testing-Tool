@@ -36,7 +36,7 @@
     </Content>
     
       <!-- Add the config.json file -->
-    <Content Include="config.json">
+    <Content Include="AWS/config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
