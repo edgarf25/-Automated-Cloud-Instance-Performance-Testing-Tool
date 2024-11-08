@@ -117,7 +117,7 @@ namespace EC2SysbenchTest
                     Memory = memoryTime.ToString(),
                     Disk = fileIOTime.ToString(),
                     totalTime = totalTime.ToString(),
-                    Os = "Ubuntu 18.04",
+                    Os = "Ubuntu 24.04",
                     Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                 };
 
