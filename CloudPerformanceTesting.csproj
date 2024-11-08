@@ -31,7 +31,7 @@
     </Content>
     
     <!-- Add the vmConfigurations.json file -->
-    <Content Include="vmConfigurations.json">
+    <Content Include="Azure/vmConfigurations.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     
