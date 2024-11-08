@@ -20,7 +20,7 @@ namespace GCPInstanceManager{
         public static async Task Run(string[] args)
         {
             Env.Load();
-            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GCP" ,"gcpConfig.json");
+            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GCdP" ,"gcpConfig.json");
             Config config = LoadConfig(configFilePath);
             string machineType = config.machineType; 
             int numInstances = config.numInstances; 

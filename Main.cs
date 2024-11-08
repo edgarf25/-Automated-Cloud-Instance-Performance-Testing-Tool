@@ -38,9 +38,30 @@ public class UserInterface
                             {
                                 case "normal":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
-                                    //await GCPRunTests.Run(args);
-                                    await AZRunTests.Run(args);
-                                    //await AWSProgram.AwsRun(args);
+                                    try{
+                                        await GCPRunTests.Run(args);
+                                    }
+                                    catch(Exception ex){
+                                        Console.WriteLine($"GCP tests failed: {ex.Message}");
+                                        Console.WriteLine("Moving to the next provider...");
+                                    }
+
+                                    try{
+                                        await AWSProgram.AwsRun(args);
+                                    }
+                                    catch(Exception ex){
+                                        Console.WriteLine($"AWS tests failed: {ex.Message}");
+                                        Console.WriteLine("Moving to the next provider...");
+                                    }
+
+                                    try{
+                                        await AZRunTests.Run(args);
+                                    }
+                                    catch(Exception ex){
+                                        Console.WriteLine($"Azure tests failed: {ex.Message}");
+                                        Console.WriteLine("Moving to the next provider...");
+                                    }
+                                    
                                     Console.WriteLine("All Performance tests have successfully run.");
                                     break;
                                 case "custom":
