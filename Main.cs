@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using EC2SysbenchTest;
+using GCPInstanceManager;
 
 public class UserInterface
 {
@@ -37,8 +38,8 @@ public class UserInterface
                                 case "normal":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
                                     //await Program.Run(args);
-                                    await AWSProgram.AwsRun(args);
-                                    await Gcs.Run(args);
+                                    //await AWSProgram.AwsRun(args);
+                                    await GCPRunTests.Run(args);
                                     Console.WriteLine("All Performance tests have successfully run.");
                                     break;
                                 case "custom":
