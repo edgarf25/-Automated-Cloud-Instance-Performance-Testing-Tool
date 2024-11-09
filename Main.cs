@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using EC2SysbenchTest;
 using GCPInstanceManager;
@@ -39,26 +40,26 @@ public class UserInterface
                                 case "normal":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
                                     try{
-                                        await GCPRunTests.Run(args);
-                                    }
-                                    catch(Exception ex){
-                                        Console.WriteLine($"GCP tests failed: {ex.Message}");
-                                        Console.WriteLine("Moving to the next provider...");
-                                    }
-
-                                    try{
                                         await AWSProgram.AwsRun(args);
                                     }
                                     catch(Exception ex){
                                         Console.WriteLine($"AWS tests failed: {ex.Message}");
                                         Console.WriteLine("Moving to the next provider...");
                                     }
-
+                                    
                                     try{
                                         await AZRunTests.Run(args);
                                     }
                                     catch(Exception ex){
                                         Console.WriteLine($"Azure tests failed: {ex.Message}");
+                                        Console.WriteLine("Moving to the next provider...");
+                                    }
+                                    
+                                    try{
+                                        await GCPRunTests.Run(args);
+                                    }
+                                    catch(Exception ex){
+                                        Console.WriteLine($"GCP tests failed: {ex.Message}");
                                         Console.WriteLine("Moving to the next provider...");
                                     }
                                     
@@ -106,6 +107,54 @@ public class UserInterface
                     break;
                 case "setup":
                     Console.WriteLine("Here we will guide you through the initial setup of the application.");
+                    Console.WriteLine("Setting up environment variables...");
+                    Console.WriteLine("Azure:\n");
+                    Console.Write("Enter Azure Tenant ID: ");
+                    string azTenantID = Console.ReadLine();
+                    Console.Write("Enter App ID: ");
+                    string azClientID = Console.ReadLine();
+                    Console.Write("Enter password: ");
+                    string azClientSecret = Console.ReadLine();
+                    Console.Write("Enter ID: ");
+                    string azSubscriptionID = Console.ReadLine();
+
+                    Console.Write("\nAWS:\n");
+                    Console.Write("Enter Security Group ID: ");
+                    string awsSecGroupID = Console.ReadLine();
+                    Console.Write("Enter key-pair name: ");
+                    string awsKeyPair = Console.ReadLine();
+                    Console.Write("Enter Subnet ID: ");
+                    string awsSubnetID = Console.ReadLine();
+                    Console.Write("Enter IAM Role Name: ");
+                    string awsIAMRole = Console.ReadLine();
+
+                    Console.WriteLine("\nGCP: \n");
+                    Console.Write("Enter Project ID: ");
+                    string gcpProjectID = Console.ReadLine();
+
+                    Console.WriteLine("Database: \n");
+                    Console.Write("Enter Database Key: ");
+                    string dbConnectionString = Console.ReadLine();
+
+
+
+                    string filePath = ".env";
+                    string[] lines = {
+                        $"AZURE_TENANT_ID = {azTenantID}",
+                        $"AZURE_CLIENT_ID = {azClientID}",
+                        $"AZURE_CLIENT_SECRET = {azClientSecret}",
+                        $"AZURE_SUBSCRIPTION_ID = {azSubscriptionID}",
+                        $"AWS_SECURITY_GROUP_ID = {awsSecGroupID}",
+                        $"AWS_KEY_PAIR_NAME = {awsKeyPair}",
+                        $"AWS_SUBNET_ID = {awsSubnetID}",
+                        $"AWS_IAM_ROLE = {awsIAMRole}",
+                        $"DB_CONNECTION_STRING = {dbConnectionString}",
+                        $"PROJECT_ID = {gcpProjectID}",
+                    };
+
+                    File.WriteAllLines(filePath, lines);
+                    Console.WriteLine(".env file created");
+
                     break;
                 default:
                     Console.WriteLine("Invalid command. Please enter 'run' 'credits' or 'exit'.");
