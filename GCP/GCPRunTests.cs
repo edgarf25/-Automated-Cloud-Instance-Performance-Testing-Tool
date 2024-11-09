@@ -20,7 +20,7 @@ namespace GCPInstanceManager{
         public static async Task Run(string[] args)
         {
             Env.Load();
-            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GCdP" ,"gcpConfig.json");
+            string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GCP" ,"gcpConfig.json");
             Config config = LoadConfig(configFilePath);
             string machineType = config.machineType; 
             int numInstances = config.numInstances; 
@@ -73,12 +73,12 @@ namespace GCPInstanceManager{
                 "cat fileio_time.txt"
             };
             
-            Console.WriteLine("Waiting for instance to be ready...");
+            Console.WriteLine("[GCP] Waiting for instance to be ready...");
             await Task.Delay(30000);
 
             foreach (var instanceName in instanceNames)
             {
-                Console.WriteLine($"Executing commands on instance: {instanceName}");
+                Console.WriteLine($"[GCP] Executing commands on instance: {instanceName}");
                 string output = "";
                 foreach (var command in commands)
                 {
@@ -109,14 +109,14 @@ namespace GCPInstanceManager{
                 //Send data to Database
                 cloudPerformanceData.InsertData(data); 
 
-                Console.WriteLine($"CPU Time: {cpuTime}");
-                Console.WriteLine($"Memory Time: {memoryTime}");
-                Console.WriteLine($"FileIO Time: {fileIOTime}");
+                Console.WriteLine($"[GCP] CPU Time: {cpuTime}");
+                Console.WriteLine($"[GCP] Memory Time: {memoryTime}");
+                Console.WriteLine($"[GCP] FileIO Time: {fileIOTime}");
             }
 
 
             await CreateInstanceAsyncSample.DeleteInstances(projectId, zone, numInstances);
-            Console.WriteLine("Instances deleted successfully.");
+            Console.WriteLine("[GCP] Instances deleted successfully.");
         }
 
         static async Task<string> ExecuteCommandAsync(string commandToExecute, string instanceName, string zone)
@@ -126,7 +126,7 @@ namespace GCPInstanceManager{
 
             ProcessStartInfo processInfo = new ProcessStartInfo
             {
-                FileName = "gcloud.cmd",
+                FileName = @"C:\Users\Edgar\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
                 Arguments = arguments,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -249,7 +249,7 @@ namespace GCPInstanceManager{
         {
             for(int i = 1; i <= numInstances; i++){
                 string machineName = "test-machine" + i;
-                Console.WriteLine($"Deleting Instance {machineName}");
+                Console.WriteLine($"[GCP] Deleting Instance {machineName}");
                 await DeleteInstanceAsync(projectId, zone, machineName);
             }
         }

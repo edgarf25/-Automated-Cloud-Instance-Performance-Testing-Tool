@@ -16,57 +16,6 @@
         "publicIpName": "myPublicIP1",
         "networkInterfaceName": "myNIC1",
         "osDiskName": "myOsDisk1"
-      },
-      {
-        "name": "myVM2",
-        "resourceGroupName": "myResourceGroupAutomation2",
-        "location": "eastus2",
-        "vmSize": "Standard_B1s", 
-        "adminUsername": "azureuser",
-        "adminPassword": "P@ssw0rd1234",
-        "network": {
-          "virtualNetworkName": "myVNet2",
-          "subnetName": "mySubnet2",
-          "addressPrefix": "10.0.0.0/16",
-          "subnetPrefix": "10.0.0.0/24"
-        },
-        "publicIpName": "myPublicIP2",
-        "networkInterfaceName": "myNIC2",
-        "osDiskName": "myOsDisk2"
-      },
-      {
-        "name": "myVM3",
-        "resourceGroupName": "myResourceGroupAutomation3",
-        "location": "eastus2",
-        "vmSize": "Standard_B2s", 
-        "adminUsername": "azureuser",
-        "adminPassword": "P@ssw0rd1234",
-        "network": {
-          "virtualNetworkName": "myVNet3",
-          "subnetName": "mySubnet3",
-          "addressPrefix": "10.0.0.0/16",
-          "subnetPrefix": "10.0.0.0/24"
-        },
-        "publicIpName": "myPublicIP3",
-        "networkInterfaceName": "myNIC3",
-        "osDiskName": "myOsDisk3"
-      },
-      {
-        "name": "myVM4",
-        "resourceGroupName": "myResourceGroupAutomation4",
-        "location": "eastus2",
-        "vmSize": "Standard_B2s", 
-        "adminUsername": "azureuser",
-        "adminPassword": "P@ssw0rd1234",
-        "network": {
-          "virtualNetworkName": "myVNet4",
-          "subnetName": "mySubnet4",
-          "addressPrefix": "10.0.0.0/16",
-          "subnetPrefix": "10.0.0.0/24"
-        },
-        "publicIpName": "myPublicIP4",
-        "networkInterfaceName": "myNIC4",
-        "osDiskName": "myOsDisk4"
       }
     ]
   }

@@ -58,7 +58,7 @@ namespace EC2SysbenchTest
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances);
 
             // 2. Giving time for the instances to be ready
-            Console.WriteLine("Waiting for the server to be ready...");
+            Console.WriteLine("[AWS] Waiting for the server to be ready...");
             await Task.Delay(30000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
             
             // 3. Running sysbench tests on the instance through SSM
@@ -85,7 +85,7 @@ namespace EC2SysbenchTest
             
             foreach (var instanceId in instanceIds)
             {
-                Console.WriteLine($"Checking if instance {instanceId} is ready for SSM commands...");
+                Console.WriteLine($"[AWS] Checking if instance {instanceId} is ready for SSM commands...");
 
                 var request = new DescribeInstanceTypesRequest
                 {
@@ -95,7 +95,7 @@ namespace EC2SysbenchTest
                 var response = await ec2Client.DescribeInstanceTypesAsync(request);
                 var instanceTypeInfo = response.InstanceTypes.FirstOrDefault();
 
-                Console.WriteLine($"Instance {instanceId} is ready. Running sysbench...");
+                Console.WriteLine($"[AWS] Instance {instanceId} is ready. Running sysbench...");
 
                 // Run the command on this instance
                 string output = await RunCommandOnInstance(ssmClient, instanceId, command);
@@ -123,16 +123,16 @@ namespace EC2SysbenchTest
 
                 cloudPerformanceData.InsertData(data); //send data to DB
 
-                Console.WriteLine($"CPU Time: {cpuTime}");
-                Console.WriteLine($"Memory Time: {memoryTime}");
-                Console.WriteLine($"File I/O Time: {fileIOTime}");
-                Console.WriteLine($"Total Time: {totalTime}");
+                Console.WriteLine($"[AWS] CPU Time: {cpuTime}");
+                Console.WriteLine($"[AWS] Memory Time: {memoryTime}");
+                Console.WriteLine($"[AWS] File I/O Time: {fileIOTime}");
+                Console.WriteLine($"[AWS] Total Time: {totalTime}");
 
                 // Collect output
                 allOutputs.Add($"Instance {instanceId} Output:\n{output}");
 
                 // Wait for a while before moving on to the next instance (if needed)
-                Console.WriteLine("Waiting before moving to the next instance...");
+                Console.WriteLine("[AWS] Waiting before moving to the next instance...");
                 await Task.Delay(5000);
             }
 
@@ -161,7 +161,7 @@ namespace EC2SysbenchTest
         
         static async Task<List<string>> LaunchInstance(IAmazonEC2 ec2Client, string amiId, string securityGroupId, string keyPair, string subnetId, string iamInstanceProfileName, int totalInstances)
         {
-            Console.WriteLine("Launching the instances...");
+            Console.WriteLine("[AWS] Launching the instances...");
 
             var request = new RunInstancesRequest
             {
@@ -198,8 +198,8 @@ namespace EC2SysbenchTest
             foreach (var instance in response.Reservation.Instances)
             {
                 instanceIds.Add(instance.InstanceId);
-                Console.WriteLine($"Instance {instance.InstanceId} launched successfully.");
-                Console.WriteLine($"Public IP: {instance.PublicIpAddress}, Public DNS: {instance.PublicDnsName}");
+                Console.WriteLine($"[AWS] Instance {instance.InstanceId} launched successfully.");
+                Console.WriteLine($"[AWS] Public IP: {instance.PublicIpAddress}, Public DNS: {instance.PublicDnsName}");
             }
 
             return instanceIds;  
@@ -207,7 +207,7 @@ namespace EC2SysbenchTest
 
         static async Task TerminateInstances(IAmazonEC2 ec2Client, List<string> instanceIds)
         {
-            Console.WriteLine($"Terminating instances: {string.Join(", ", instanceIds)}");
+            Console.WriteLine($"[AWS] Terminating instances: {string.Join(", ", instanceIds)}");
             var terminateRequest = new TerminateInstancesRequest
             {
                 InstanceIds = instanceIds  // Pass the list of instance IDs
@@ -216,13 +216,13 @@ namespace EC2SysbenchTest
 
             foreach (var terminatedInstance in response.TerminatingInstances)
             {
-                Console.WriteLine($"Instance {terminatedInstance.InstanceId} terminated successfully with current state: {terminatedInstance.CurrentState.Name}");
+                Console.WriteLine($"[AWS] Instance {terminatedInstance.InstanceId} terminated successfully with current state: {terminatedInstance.CurrentState.Name}");
             }
         }
 
         static async Task<string> RunCommandOnInstance(IAmazonSimpleSystemsManagement ssmClient, string instanceId, string command)
         {
-            Console.WriteLine($"instanceID2: {instanceId}");
+            Console.WriteLine($"[AWS] instanceID2: {instanceId}");
             var sendCommandRequest = new SendCommandRequest
             {
                 InstanceIds = new List<string> { instanceId },
@@ -235,7 +235,7 @@ namespace EC2SysbenchTest
 
             var sendCommandResponse = await ssmClient.SendCommandAsync(sendCommandRequest);
             string commandId = sendCommandResponse.Command.CommandId;
-            Console.WriteLine($"Command sent. Command ID: {commandId}");
+            Console.WriteLine($"[AWS] Command sent. Command ID: {commandId}");
 
             string output = await WaitForCommandToComplete(ssmClient, commandId, instanceId);
 
@@ -266,24 +266,24 @@ namespace EC2SysbenchTest
 
                     if (response.Status == CommandInvocationStatus.Success)
                     {
-                        Console.WriteLine("Command execution completed successfully.");
+                        Console.WriteLine("[AWS] Command execution completed successfully.");
                         string output = response.StandardOutputContent;
-                        Console.WriteLine($"Output:\n{output}");
+                        Console.WriteLine($"[AWS] Output:\n{output}");
                         return output;  // Return the output
                     }
                     else if (response.Status == CommandInvocationStatus.Failed)
                     {
-                        Console.WriteLine($"Command failed: {response.StandardErrorContent}");
+                        Console.WriteLine($"[AWS] Command failed: {response.StandardErrorContent}");
                         return response.StandardErrorContent;  // Return the error output
                     }
 
-                    Console.WriteLine("Waiting for command to complete...");
+                    Console.WriteLine("[AWS] Waiting for command to complete...");
                     await Task.Delay(delayBetweenRetries); // Wait before checking again
                 }
                 catch (Amazon.SimpleSystemsManagement.Model.InvocationDoesNotExistException)
                 {
                     // Log the exception, but keep retrying up to maxRetries
-                    Console.WriteLine($"Invocation does not exist. Retrying... ({retryCount + 1}/{maxRetries})");
+                    Console.WriteLine($"[AWS] Invocation does not exist. Retrying... ({retryCount + 1}/{maxRetries})");
                     await Task.Delay(delayBetweenRetries);
                 }
 

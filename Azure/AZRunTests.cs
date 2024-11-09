@@ -33,21 +33,21 @@ namespace AZInstanceManager{
             // Check if vmConfigurations is null
             if (vmConfigurations == null)
             {
-                Console.WriteLine("vmConfigurations is null.");
+                Console.WriteLine("[AZURE] vmConfigurations is null.");
                 return;
             }
 
             // Check if vmConfigurations.Vms is null
             if (vmConfigurations.Vms == null)
             {
-                Console.WriteLine("vmConfigurations.Vms is null.");
+                Console.WriteLine("[AZURE] vmConfigurations.Vms is null.");
                 return;
             }
 
             // Check if vmConfigurations.Vms has any items
             if (vmConfigurations.Vms.Count == 0)
             {
-                Console.WriteLine("vmConfigurations.Vms is empty.");
+                Console.WriteLine("[AZURE] vmConfigurations.Vms is empty.");
                 return;
             }
 
@@ -56,17 +56,17 @@ namespace AZInstanceManager{
             {
                 try
                 {
-                    Console.WriteLine($"Processing VM configuration: {vmConfig.Name}");
+                    Console.WriteLine($"[AZURE] Processing VM configuration: {vmConfig.Name}");
                     await CreateAndManageVmAsync(vmConfig, tokenCredentials, subscriptionId);
-                    Console.WriteLine($"Finished processing VM: {vmConfig.Name}");
+                    Console.WriteLine($"[AZURE] Finished processing VM: {vmConfig.Name}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"An error occurred while processing VM '{vmConfig.Name}': {ex.Message}");
+                    Console.WriteLine($"[AZURE] An error occurred while processing VM '{vmConfig.Name}': {ex.Message}");
                 }
             }
 
-            Console.WriteLine("All VMs have been processed.");
+            Console.WriteLine("[AZURE] All VMs have been processed.");
         }
 
         // Function to load the VM configurations from the JSON file
@@ -94,15 +94,15 @@ namespace AZInstanceManager{
                 }
                 else
                 {
-                    Console.WriteLine("Successfully loaded JSON configuration file.");
-                    Console.WriteLine($"Number of VMs: {vmConfigurations.Vms?.Count ?? 0}");
+                    Console.WriteLine("[AZURE] Successfully loaded JSON configuration file.");
+                    Console.WriteLine($"[AZURE] Number of VMs: {vmConfigurations.Vms?.Count ?? 0}");
                 }
 
                 return vmConfigurations;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading or deserializing configuration file '{filePath}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error reading or deserializing configuration file '{filePath}': {ex.Message}");
                 return null;
             }
         }
@@ -123,7 +123,7 @@ namespace AZInstanceManager{
             var subnet = virtualNetwork.Subnets.FirstOrDefault(s => s.Name == vmConfig.Network.SubnetName);
             if (subnet == null)
             {
-                Console.WriteLine("Failed to retrieve subnet.");
+                Console.WriteLine("[AZURE] Failed to retrieve subnet.");
                 return;
             }
             var publicIp = await CreatePublicIPAddressAsync(networkClient, vmConfig);
@@ -139,12 +139,12 @@ namespace AZInstanceManager{
             string resultMessage = await RunCommandOnVmAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.Name, vmConfig);
             Console.WriteLine(resultMessage);
 
-            Console.WriteLine($"VM '{vmConfig.Name}' created and commands have been executed.");
+            Console.WriteLine($"[AZURE] VM '{vmConfig.Name}' created and commands have been executed.");
 
             // Delete resources after tests
             await DeleteResourcesAsync(computeClient, networkClient, resourceClient, vmConfig);
 
-            Console.WriteLine($"Resources for VM '{vmConfig.Name}' have been deleted.");
+            Console.WriteLine($"[AZURE] Resources for VM '{vmConfig.Name}' have been deleted.");
         }
 
         // Function to create a virtual network
@@ -163,7 +163,7 @@ namespace AZInstanceManager{
                     }
                 }
             };
-            Console.WriteLine("Creating virtual network...");
+            Console.WriteLine("[AZURE] Creating virtual network...");
             return await networkClient.VirtualNetworks.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.Network.VirtualNetworkName, vnetParams);
         }
 
@@ -178,7 +178,7 @@ namespace AZInstanceManager{
                 PublicIPAllocationMethod = IPAllocationMethod.Dynamic,
                 DnsSettings = new PublicIPAddressDnsSettings { DomainNameLabel = uniqueDnsLabel }
             };
-            Console.WriteLine("Creating public IP address...");
+            Console.WriteLine("[AZURE] Creating public IP address...");
             return await networkClient.PublicIPAddresses.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.PublicIpName, publicIpParams);
         }
 
@@ -198,7 +198,7 @@ namespace AZInstanceManager{
                     }
                 }
             };
-            Console.WriteLine("Creating network interface...");
+            Console.WriteLine("[AZURE] Creating network interface...");
             return await networkClient.NetworkInterfaces.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.NetworkInterfaceName, nicParams);
         }
 
@@ -242,7 +242,7 @@ namespace AZInstanceManager{
                     }
                 }
             };
-            Console.WriteLine("Creating virtual machine...");
+            Console.WriteLine("[AZURE] Creating virtual machine...");
             return await computeClient.VirtualMachines.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.Name, vmParams);
         }
 
@@ -253,7 +253,7 @@ namespace AZInstanceManager{
             do
             {
                 vm = await computeClient.VirtualMachines.GetAsync(resourceGroupName, vmName);
-                Console.WriteLine($"Current VM provisioning state: {vm.ProvisioningState}");
+                Console.WriteLine($"[AZURE] Current VM provisioning state: {vm.ProvisioningState}");
                 if (vm.ProvisioningState == "Succeeded")
                 {
                     break;
@@ -265,7 +265,7 @@ namespace AZInstanceManager{
         // Function to run commands on the VM
         private static async Task<string> RunCommandOnVmAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName, VmConfiguration vmConfig)
         {
-            Console.WriteLine("Running Tests on VM...");
+            Console.WriteLine("[AZURE] Running Tests on VM...");
             var runCommandParams = new RunCommandInput
             {
                 CommandId = "RunShellScript",
@@ -288,7 +288,7 @@ namespace AZInstanceManager{
             {
                 var result = await computeClient.VirtualMachines.RunCommandAsync(resourceGroupName, vmName, runCommandParams);
 
-                Console.WriteLine("Successfully ran commands on VM");
+                Console.WriteLine("[AZURE] Successfully ran commands on VM");
 
                 if (result.Value != null && result.Value.Count > 0)
                 {
@@ -318,9 +318,9 @@ namespace AZInstanceManager{
 
                     if (totalTimes.Count == 3)
                     {
-                        Console.WriteLine($"CPU Test Time: {totalTimes[0]} seconds");
-                        Console.WriteLine($"Memory Test Time: {totalTimes[1]} seconds");
-                        Console.WriteLine($"File I/O Test Time: {totalTimes[2]} seconds");
+                        Console.WriteLine($"[AZURE] CPU Test Time: {totalTimes[0]} seconds");
+                        Console.WriteLine($"[AZURE] Memory Test Time: {totalTimes[1]} seconds");
+                        Console.WriteLine($"[AZURE] File I/O Test Time: {totalTimes[2]} seconds");
                         double totalTime = totalTimes.Sum();
 
                         //Adding the data to MongoDB
@@ -360,14 +360,14 @@ namespace AZInstanceManager{
             }
             catch (CloudException ex)
             {
-                Console.WriteLine("Error occurred during command execution:");
-                Console.WriteLine($"Code: {ex.Body.Code}");
-                Console.WriteLine($"Message: {ex.Body.Message}");
+                Console.WriteLine("[AZURE] Error occurred during command execution:");
+                Console.WriteLine($"[AZURE] Code: {ex.Body.Code}");
+                Console.WriteLine($"[AZURE] Message: {ex.Body.Message}");
                 return "An error occurred during command execution.";
             }
             catch (Exception ex)
             {
-                Console.WriteLine("An unexpected error occurred:");
+                Console.WriteLine("[AZURE] An unexpected error occurred:");
                 Console.WriteLine(ex.Message);
                 return "An unexpected error occurred during command execution.";
             }
@@ -404,13 +404,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting virtual machine '{vmName}'...");
+                Console.WriteLine($"[AZURE] Deleting virtual machine '{vmName}'...");
                 await computeClient.VirtualMachines.DeleteAsync(resourceGroupName, vmName);
-                Console.WriteLine("Virtual machine deleted.");
+                Console.WriteLine("[AZURE] Virtual machine deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting virtual machine '{vmName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting virtual machine '{vmName}': {ex.Message}");
             }
         }
 
@@ -419,13 +419,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting network interface '{networkInterfaceName}'...");
+                Console.WriteLine($"[AZURE] Deleting network interface '{networkInterfaceName}'...");
                 await networkClient.NetworkInterfaces.DeleteAsync(resourceGroupName, networkInterfaceName);
-                Console.WriteLine("Network interface deleted.");
+                Console.WriteLine("[AZURE] Network interface deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting network interface '{networkInterfaceName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting network interface '{networkInterfaceName}': {ex.Message}");
             }
         }
 
@@ -434,13 +434,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting public IP address '{publicIpName}'...");
+                Console.WriteLine($"[AZURE] Deleting public IP address '{publicIpName}'...");
                 await networkClient.PublicIPAddresses.DeleteAsync(resourceGroupName, publicIpName);
-                Console.WriteLine("Public IP address deleted.");
+                Console.WriteLine("[AZURE] Public IP address deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting public IP address '{publicIpName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting public IP address '{publicIpName}': {ex.Message}");
             }
         }
 
@@ -449,13 +449,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting virtual network '{virtualNetworkName}'...");
+                Console.WriteLine($"[AZURE] Deleting virtual network '{virtualNetworkName}'...");
                 await networkClient.VirtualNetworks.DeleteAsync(resourceGroupName, virtualNetworkName);
-                Console.WriteLine("Virtual network deleted.");
+                Console.WriteLine("[AZURE] Virtual network deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting virtual network '{virtualNetworkName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting virtual network '{virtualNetworkName}': {ex.Message}");
             }
         }
 
@@ -464,13 +464,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting disk '{diskName}'...");
+                Console.WriteLine($"[AZURE] Deleting disk '{diskName}'...");
                 await computeClient.Disks.DeleteAsync(resourceGroupName, diskName);
-                Console.WriteLine("Disk deleted.");
+                Console.WriteLine("[AZURE] Disk deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting disk '{diskName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting disk '{diskName}': {ex.Message}");
             }
         }
 
@@ -479,13 +479,13 @@ namespace AZInstanceManager{
         {
             try
             {
-                Console.WriteLine($"Deleting resource group '{resourceGroupName}'...");
+                Console.WriteLine($"[AZURE] Deleting resource group '{resourceGroupName}'...");
                 await resourceClient.ResourceGroups.DeleteAsync(resourceGroupName);
-                Console.WriteLine("Resource group deleted.");
+                Console.WriteLine("[AZURE] Resource group deleted.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting resource group '{resourceGroupName}': {ex.Message}");
+                Console.WriteLine($"[AZURE] Error deleting resource group '{resourceGroupName}': {ex.Message}");
             }
         }
     }

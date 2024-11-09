@@ -39,31 +39,22 @@ public class UserInterface
                             {
                                 case "normal":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
-                                    try{
-                                        await AWSProgram.AwsRun(args);
+                                    Task task1 = AWSProgram.AwsRun(args);
+                                    Task task2 = AZRunTests.Run(args);
+                                    Task task3 = GCPRunTests.Run(args);
+
+                                    try
+                                    {
+                                        // Await all tasks to complete
+                                        await Task.WhenAll(task1, task2, task3);
+                                        //await Task.WhenAll(task3);
+                                        Console.WriteLine("All Performance tests have successfully run.");
                                     }
-                                    catch(Exception ex){
-                                        Console.WriteLine($"AWS tests failed: {ex.Message}");
-                                        Console.WriteLine("Moving to the next provider...");
-                                    }
-                                    
-                                    try{
-                                        await AZRunTests.Run(args);
-                                    }
-                                    catch(Exception ex){
-                                        Console.WriteLine($"Azure tests failed: {ex.Message}");
-                                        Console.WriteLine("Moving to the next provider...");
-                                    }
-                                    
-                                    try{
-                                        await GCPRunTests.Run(args);
-                                    }
-                                    catch(Exception ex){
-                                        Console.WriteLine($"GCP tests failed: {ex.Message}");
-                                        Console.WriteLine("Moving to the next provider...");
-                                    }
-                                    
-                                    Console.WriteLine("All Performance tests have successfully run.");
+                                    catch (Exception ex)
+                                    {
+                                        // Handle exceptions
+                                        Console.WriteLine(ex);
+                                    }     
                                     break;
                                 case "custom":
                                     Console.WriteLine("How many providers would you like to run a performance test on? one, two or three?(only AWS, Azure, and GCP are supported)");
