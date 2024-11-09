@@ -25,10 +25,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Add the .env file -->
-    <Content Include=".env">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Update=".env">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Condition>Exists('.env')</Condition>
+    </None>
     
     <!-- Add the vmConfigurations.json file -->
     <Content Include="Azure/vmConfigurations.json">
