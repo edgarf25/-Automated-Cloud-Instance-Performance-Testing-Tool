@@ -40,7 +40,7 @@ namespace GCPInstanceManager{
             var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
             
             //Initializing instances
-            await CreateInstanceAsyncSample.CreateInstances(numInstances, projectId, machineType);
+            await CreateInstanceAsyncSample.CreateInstances(numInstances, projectId, machineType, zone);
 
             for(int i = 1 ; i <= numInstances; i++)
             {
@@ -126,7 +126,7 @@ namespace GCPInstanceManager{
 
             ProcessStartInfo processInfo = new ProcessStartInfo
             {
-                FileName = @"C:\Users\Edgar\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
+                FileName = @"C:\Users\romer381\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
                 Arguments = arguments,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -229,11 +229,11 @@ namespace GCPInstanceManager{
         }
         
         //Creating multiple instances
-        public static async Task CreateInstances(int numInstances, string projectId, string machineType)
+        public static async Task CreateInstances(int numInstances, string projectId, string machineType, string zone)
         {
             for(int i = 1; i <= numInstances; i++){
                 string machineName = "test-machine" + i;
-                await CreateInstanceAsync(machineName: machineName, projectId: projectId, machineType: machineType);
+                await CreateInstanceAsync(machineName: machineName, projectId: projectId, machineType: machineType, zone: zone);
             }
         }
 
