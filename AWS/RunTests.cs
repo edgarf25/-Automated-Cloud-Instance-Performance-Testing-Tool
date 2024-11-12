@@ -19,6 +19,7 @@ namespace EC2SysbenchTest
         public class Config
         {
             public required string amiId { get; set; }
+            public required string instanceType{ get; set; }
             public int totalInstances { get; set; }
         }
 
@@ -30,18 +31,19 @@ namespace EC2SysbenchTest
             Config config = LoadConfig(configFilePath);
 
             string amiId = config.amiId;
-            string securityGroupId = Environment.GetEnvironmentVariable("AWS_SECURITY_GROUP_ID") ?? throw new InvalidOperationException("AWS_SECURITY_GROUP_ID environment variable is not set."); //this
             string keyPair = Environment.GetEnvironmentVariable("AWS_KEY_PAIR_NAME") ?? throw new InvalidOperationException("AWS_KEY_PAIR_NAME environment variable is not set."); //this
             string subnetId = Environment.GetEnvironmentVariable("AWS_SUBNET_ID") ?? throw new InvalidOperationException("AWS_SUBNET_ID environment variable is not set."); //this
             string iamRole = Environment.GetEnvironmentVariable("AWS_IAM_ROLE") ?? throw new InvalidOperationException("AWS_IAM_ROLE environment variable is not set."); //this
-            string instanceType = "t2.micro";   
+            string instanceType = config.instanceType;
             int totalInstances = config.totalInstances;
+            string vpcID = Environment.GetEnvironmentVariable("AWS_VPC_ID") ?? throw new InvalidOperationException("AWS_VPC_ID environment variable is not set."); 
 
             var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
             if (string.IsNullOrEmpty(connectionString))
             {
                 throw new InvalidOperationException("DB_CONNECTION_STRING environment variable is not set.");
             }
+            
             var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
             string filePath = Path.Combine("sysbench_outputs.txt");
@@ -52,10 +54,11 @@ namespace EC2SysbenchTest
             // Region and EC2/SSM clients
             var region = RegionEndpoint.USWest1;  
             var ec2Client = new AmazonEC2Client(region);
+            string securityGroupId = await CreateSecurityGroup(ec2Client, vpcID);
             var ssmClient = new AmazonSimpleSystemsManagementClient(region);
     
             // 1. Launching the EC2 instance and obtaining instanceId
-            instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances);
+            instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances, instanceType);
 
             // 2. Giving time for the instances to be ready
             Console.WriteLine("[AWS] Waiting for the server to be ready...");
@@ -70,6 +73,7 @@ namespace EC2SysbenchTest
                              "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'";
             */
             
+            
             string command = "sudo apt-get update > /dev/null 2>&1 && " +
                  "sudo apt-get install sysbench -y > /dev/null 2>&1 && " +
                  "cpu_time=$(sysbench cpu --cpu-max-prime=20000 --time=0 --events=2000 run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//') && " +
@@ -80,6 +84,7 @@ namespace EC2SysbenchTest
                  "echo $cpu_time && " +
                  "echo $memory_time && " +
                  "echo $fileio_time";
+            
             
             List<string> allOutputs = new List<string>();
             
@@ -141,6 +146,9 @@ namespace EC2SysbenchTest
 
             // 4. Terminate the instance
             await TerminateInstances(ec2Client, instanceIds);
+            Console.WriteLine("Waiting for security group to terminate...");
+            await Task.Delay(60000);
+            await DeleteSecurityGroup(ec2Client, securityGroupId);
         }
 
         static Config LoadConfig(string filePath)
@@ -158,15 +166,27 @@ namespace EC2SysbenchTest
             }
             return config;
         }
+
+        static async Task<InstanceType> getInstanceType(string instanceTypeName)
+        {
+            return instanceTypeName.ToLower() switch
+            {
+                "t2.nano" => InstanceType.T2Nano,
+                "t2.micro" => InstanceType.T2Micro,
+                "t2.small" => InstanceType.T2Small,
+                "t2.medium" => InstanceType.T2Medium,
+                _=> throw new ArgumentException("Unsupported instance type.")
+            };
+        }
         
-        static async Task<List<string>> LaunchInstance(IAmazonEC2 ec2Client, string amiId, string securityGroupId, string keyPair, string subnetId, string iamInstanceProfileName, int totalInstances)
+        static async Task<List<string>> LaunchInstance(IAmazonEC2 ec2Client, string amiId, string securityGroupId, string keyPair, string subnetId, string iamInstanceProfileName, int totalInstances, string instanceTypeName)
         {
             Console.WriteLine("[AWS] Launching the instances...");
 
             var request = new RunInstancesRequest
             {
                 ImageId = amiId,
-                InstanceType = InstanceType.T2Micro,  // Instance type
+                InstanceType = await getInstanceType(instanceTypeName),  // Instance type
                 MinCount = 1,
                 MaxCount = totalInstances,  // Number of instances to be launched
                 KeyName = keyPair,
@@ -323,6 +343,81 @@ namespace EC2SysbenchTest
 
             return false;
         }
+
+        public static async Task<string> CreateSecurityGroup(AmazonEC2Client ec2Client, string vpcID)
+        {
+            // Step 1: Create the security group
+            var createRequest = new CreateSecurityGroupRequest
+            {
+                GroupName = "MySecurityGroup", // Replace with your security group name
+                Description = "Security group for SSH access",
+                VpcId = vpcID // Replace with your VPC ID
+            };
+
+            var createResponse = await ec2Client.CreateSecurityGroupAsync(createRequest);
+            string groupId = createResponse.GroupId;
+
+            Console.WriteLine($"Created security group with ID: {groupId}");
+
+            // Step 2: Add Inbound Rule for SSH
+            var ingressRequest = new AuthorizeSecurityGroupIngressRequest
+            {
+                GroupId = groupId,
+                IpPermissions = new List<IpPermission>
+                {
+                    new IpPermission
+                    {
+                        IpProtocol = "tcp",
+                        FromPort = 22,   // SSH port
+                        ToPort = 22,
+                        IpRanges = new List<string> { "13.52.6.112/32" } // Replace with your specific IP address
+                    }
+                }
+            };
+
+            await ec2Client.AuthorizeSecurityGroupIngressAsync(ingressRequest);
+            return groupId;
+            //Console.WriteLine("Added SSH inbound rule to security group.");
+        }
+
+        public static async Task DeleteSecurityGroup(AmazonEC2Client ec2Client, string groupId)
+        {
+            try
+            {
+                // Step 1: Revoke inbound rules (optional, but ensures the group can be deleted)
+                var revokeRequest = new RevokeSecurityGroupIngressRequest
+                {
+                    GroupId = groupId,
+                    IpPermissions = new List<IpPermission>
+                    {
+                        new IpPermission
+                        {
+                            IpProtocol = "tcp",
+                            FromPort = 22,
+                            ToPort = 22,
+                            IpRanges = new List<string> { "13.52.6.112/32" } // Your specific IP range if necessary
+                        }
+                    }
+                };
+
+                await ec2Client.RevokeSecurityGroupIngressAsync(revokeRequest);
+                Console.WriteLine("Revoked SSH inbound rule from security group.");
+
+                // Step 2: Delete the security group
+                var deleteRequest = new DeleteSecurityGroupRequest
+                {
+                    GroupId = groupId
+                };
+
+                await ec2Client.DeleteSecurityGroupAsync(deleteRequest);
+                Console.WriteLine($"Security group with ID {groupId} has been deleted successfully.");
+            }
+            catch (AmazonEC2Exception ex)
+            {
+                Console.WriteLine($"Error deleting security group: {ex.Message}");
+            }
+        }
+
 
         /*
         static async Task WaitForInstanceToBeReady(IAmazonEC2 ec2Client, string instanceId)
