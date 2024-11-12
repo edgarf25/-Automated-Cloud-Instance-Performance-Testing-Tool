@@ -37,16 +37,7 @@ namespace GCPInstanceManager{
                 throw new InvalidOperationException("DB_CONNECTION_STRING environment variable is not set.");
             }
         
-            var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
-            
-            //Initializing instances
-            await CreateInstanceAsyncSample.CreateInstances(numInstances, projectId, machineType, zone);
-
-            for(int i = 1 ; i <= numInstances; i++)
-            {
-                string machineName = "test-machine" + i;
-                instanceNames.Add(machineName);
-            }            
+            var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData"); 
 
             /* //Quicker command set to execute (testing purposes)
             string[] commands = new string[]
@@ -73,16 +64,25 @@ namespace GCPInstanceManager{
                 "cat fileio_time.txt"
             };
             
-            Console.WriteLine("[GCP] Waiting for instance to be ready...");
-            await Task.Delay(30000);
-
-            foreach (var instanceName in instanceNames)
+            for (int i = 1; i <= numInstances; i++)
             {
-                Console.WriteLine($"[GCP] Executing commands on instance: {instanceName}");
+                string machineName = "test-machine" + i;
+
+                // Create instance
+                Console.WriteLine($"[GCP] Creating instance: {machineName}");
+                await CreateInstanceAsyncSample.CreateInstanceAsync(projectId, zone, machineName, machineType);
+                Console.WriteLine($"[GCP] Instance {machineName} created successfully.");
+
+                // Wait for instance to be ready
+                Console.WriteLine($"[GCP] Waiting for instance {machineName} to be ready...");
+                await Task.Delay(30000);
+
+                // Execute commands
+                Console.WriteLine($"[GCP] Executing commands on instance: {machineName}");
                 string output = "";
                 foreach (var command in commands)
                 {
-                    output += "\n" + await ExecuteCommandAsync(command, instanceName, zone);
+                    output += "\n" + await ExecuteCommandAsync(command, machineName, zone);
                 }
 
                 string[] results = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -106,17 +106,18 @@ namespace GCPInstanceManager{
                     Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                 };
 
-                //Send data to Database
-                cloudPerformanceData.InsertData(data); 
+                // Send data to Database
+                cloudPerformanceData.InsertData(data);
 
                 Console.WriteLine($"[GCP] CPU Time: {cpuTime}");
                 Console.WriteLine($"[GCP] Memory Time: {memoryTime}");
                 Console.WriteLine($"[GCP] FileIO Time: {fileIOTime}");
+
+                // Delete instance after use
+                Console.WriteLine($"[GCP] Deleting instance: {machineName}");
+                await CreateInstanceAsyncSample.DeleteInstanceAsync(projectId, zone, machineName);
+                Console.WriteLine($"[GCP] Instance {machineName} deleted successfully.");
             }
-
-
-            await CreateInstanceAsyncSample.DeleteInstances(projectId, zone, numInstances);
-            Console.WriteLine("[GCP] Instances deleted successfully.");
         }
 
         static async Task<string> ExecuteCommandAsync(string commandToExecute, string instanceName, string zone)
@@ -124,15 +125,34 @@ namespace GCPInstanceManager{
             var arguments = $"compute ssh {instanceName} --tunnel-through-iap --command \"{commandToExecute}\" --zone {zone}";
             var outputLines = new List<string>();
 
-            ProcessStartInfo processInfo = new ProcessStartInfo
+            var operatingSystem = Environment.OSVersion.Platform;
+            ProcessStartInfo processInfo;
+
+            //user is running on Windows
+            if (operatingSystem == PlatformID.Win32NT)
             {
-                FileName = @"C:\Users\romer381\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
-                Arguments = arguments,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                processInfo = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = "/C gcloud.cmd " + arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+            }
+            else
+            {
+                processInfo = new ProcessStartInfo
+                {
+                    FileName = "gcloud.cmd",
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+            }
 
             using (Process process = new Process { StartInfo = processInfo })
             {
