@@ -145,7 +145,7 @@ namespace GCPInstanceManager{
             {
                 processInfo = new ProcessStartInfo
                 {
-                    FileName = "gcloud.cmd",
+                    FileName = "gcloud",
                     Arguments = arguments,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,

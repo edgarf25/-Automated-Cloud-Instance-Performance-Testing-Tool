@@ -39,15 +39,15 @@ public class UserInterface
                             {
                                 case "normal":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
-                                    Task task1 = AWSProgram.AwsRun(args);
+                                    //Task task1 = AWSProgram.AwsRun(args);
                                     //Task task2 = AZRunTests.Run(args);
-                                    //Task task3 = GCPRunTests.Run(args);
+                                    Task task3 = GCPRunTests.Run(args);
 
                                     try
                                     {
                                         // Await all tasks to complete
                                         //await Task.WhenAll(task1, task2, task3);
-                                        await Task.WhenAll(task1);
+                                        await Task.WhenAll(task3);
                                         Console.WriteLine("All Performance tests have successfully run.");
                                     }
                                     catch (Exception ex)
