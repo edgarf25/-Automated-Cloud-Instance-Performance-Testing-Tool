@@ -11,6 +11,7 @@ using System.Text.Json;
 using MongoDB.Driver;
 using MongoDbAtlasService;
 using DotNetEnv;
+using System.Linq;
 
 namespace EC2SysbenchTest
 {
@@ -18,8 +19,8 @@ namespace EC2SysbenchTest
     {
         public class Config
         {
-            public required string amiId { get; set; }
             public required string instanceType{ get; set; }
+            public required string region{ get; set; }
             public int totalInstances { get; set; }
         }
 
@@ -30,13 +31,13 @@ namespace EC2SysbenchTest
             string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "AWS" ,"config.json");
             Config config = LoadConfig(configFilePath);
 
-            string amiId = config.amiId;
-            string keyPair = Environment.GetEnvironmentVariable("AWS_KEY_PAIR_NAME") ?? throw new InvalidOperationException("AWS_KEY_PAIR_NAME environment variable is not set."); //this
-            string subnetId = Environment.GetEnvironmentVariable("AWS_SUBNET_ID") ?? throw new InvalidOperationException("AWS_SUBNET_ID environment variable is not set."); //this
+            string region = config.region;
+            var regionEndpoint = RegionEndpoint.GetBySystemName(region);
+            string amiId = await GetAmiID(region);
+            string keyPair = await CreateKeyPairAsync(region);
             string iamRole = Environment.GetEnvironmentVariable("AWS_IAM_ROLE") ?? throw new InvalidOperationException("AWS_IAM_ROLE environment variable is not set."); //this
             string instanceType = config.instanceType;
             int totalInstances = config.totalInstances;
-            string vpcID = Environment.GetEnvironmentVariable("AWS_VPC_ID") ?? throw new InvalidOperationException("AWS_VPC_ID environment variable is not set."); 
 
             var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
             if (string.IsNullOrEmpty(connectionString))
@@ -49,18 +50,23 @@ namespace EC2SysbenchTest
             string filePath = Path.Combine("sysbench_outputs.txt");
             List<string> instanceIds = new List<string>();
 
-            Console.WriteLine(amiId);
-
             // Region and EC2/SSM clients
-            var region = RegionEndpoint.USWest1;  
-            var ec2Client = new AmazonEC2Client(region);
+            var ec2Client = new AmazonEC2Client(regionEndpoint);
+            var ssmClient = new AmazonSimpleSystemsManagementClient(regionEndpoint);
+            string vpcID = await GetVpcId(ec2Client, region);
+            string subnetId = await GetSubnetId(ec2Client, vpcID);
             string securityGroupId = await CreateSecurityGroup(ec2Client, vpcID);
-            var ssmClient = new AmazonSimpleSystemsManagementClient(region);
+            //var amiIds = await GetAmiIdsForOsAsync("ubuntu-24.04", region, ec2Client);
+            //string amiId = amiIds[0];
+
+            Console.WriteLine(amiId);
     
             // 1. Launching the EC2 instance and obtaining instanceId
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances, instanceType);
 
             // 2. Giving time for the instances to be ready
+            Console.WriteLine($"Using VPC ID: {vpcID} and Subnet ID: {subnetId}");
+            await Task.Delay(15000);
             Console.WriteLine("[AWS] Waiting for the server to be ready...");
             await Task.Delay(30000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
             
@@ -117,7 +123,7 @@ namespace EC2SysbenchTest
                 {
                     Provider = "AWS",
                     VmSize = instanceType,
-                    Location = region.SystemName,
+                    Location = regionEndpoint.SystemName,
                     CPU = cpuTime.ToString(),
                     Memory = memoryTime.ToString(),
                     Disk = fileIOTime.ToString(),
@@ -133,10 +139,8 @@ namespace EC2SysbenchTest
                 Console.WriteLine($"[AWS] File I/O Time: {fileIOTime}");
                 Console.WriteLine($"[AWS] Total Time: {totalTime}");
 
-                // Collect output
                 allOutputs.Add($"Instance {instanceId} Output:\n{output}");
 
-                // Wait for a while before moving on to the next instance (if needed)
                 Console.WriteLine("[AWS] Waiting before moving to the next instance...");
                 await Task.Delay(5000);
             }
@@ -144,11 +148,12 @@ namespace EC2SysbenchTest
                     
             File.WriteAllLines(filePath, allOutputs);
 
-            // 4. Terminate the instance
+            // 4. Terminate the instance and generated attributes
             await TerminateInstances(ec2Client, instanceIds);
-            Console.WriteLine("Waiting for security group to terminate...");
-            await Task.Delay(60000);
+            Console.WriteLine("Waiting for instances to terminate...");
+            await Task.Delay(90000);
             await DeleteSecurityGroup(ec2Client, securityGroupId);
+            await DeleteKeyPairAsync(keyPair, ec2Client);
         }
 
         static Config LoadConfig(string filePath)
@@ -418,36 +423,117 @@ namespace EC2SysbenchTest
             }
         }
 
-
-        /*
-        static async Task WaitForInstanceToBeReady(IAmazonEC2 ec2Client, string instanceId)
+        public static async Task<string> GetVpcId(AmazonEC2Client ec2Client, string region)
         {
-            Console.WriteLine("Waiting for instance to pass 2/2 checks...");
-
-            while (true)
+            var vpcResponse = await ec2Client.DescribeVpcsAsync(new DescribeVpcsRequest());
+            var vpcId = vpcResponse.Vpcs.FirstOrDefault()?.VpcId;
+            
+            if (string.IsNullOrEmpty(vpcId))
             {
-                var request = new DescribeInstanceStatusRequest
-                {
-                    InstanceIds = new List<string> { instanceId },
-                    IncludeAllInstances = true
-                };
-
-                var response = await ec2Client.DescribeInstanceStatusAsync(request);
-                var instanceStatus = response.InstanceStatuses.FirstOrDefault();
-
-                if (instanceStatus != null &&
-                    instanceStatus.InstanceState.Name == "running" &&  // Check if instance is running
-                    instanceStatus.InstanceStatus.Status == "ok" &&    // Check instance health
-                    instanceStatus.SystemStatus.Status == "ok")        // Check system health
-                {
-                    Console.WriteLine("Instance is ready and passed 2/2 checks.");
-                    break;
-                }
-
-                Console.WriteLine("Instance not ready yet, waiting 10 seconds...");
-                await Task.Delay(10000);  // Wait 10 seconds before checking again
+                throw new InvalidOperationException("No VPC found in the region.");
             }
+
+            return vpcId;
+        }
+
+        public static async Task<string> GetSubnetId(AmazonEC2Client ec2Client, string vpcId)
+        {
+            var subnetResponse = await ec2Client.DescribeSubnetsAsync(new DescribeSubnetsRequest
+            {
+                Filters = new List<Filter>
+                {
+                    new Filter
+                    {
+                        Name = "vpc-id",
+                        Values = new List<string> { vpcId }
+                    }
+                }
+            });
+
+            var subnetId = subnetResponse.Subnets.FirstOrDefault()?.SubnetId;
+            
+            if (string.IsNullOrEmpty(subnetId))
+            {
+                throw new InvalidOperationException($"No subnet found in VPC {vpcId}.");
+            }
+
+            return subnetId;
+        }   
+        /*
+        public static async Task<List<string>> GetAmiIdsForOsAsync(string osName, string region, AmazonEC2Client ec2Client)
+            {
+                try
+                {
+                    // Prepare the request to describe images
+                    var describeRequest = new DescribeImagesRequest
+                    {
+                        // Filter by the name of the AMI (adjust based on OS)
+                        Filters = new List<Filter>
+                        {
+                            new Filter("name", new List<string> { $"*{osName}*" })
+                        }
+                    };
+
+                    // Call DescribeImages API
+                    var describeResponse = await ec2Client.DescribeImagesAsync(describeRequest);
+
+                    List<string> amiIds = new List<string>();
+
+                    // Loop through the images to find AMI IDs that match the format
+                    foreach (var image in describeResponse.Images)
+                    {
+                        amiIds.Add(image.ImageId);
+                    }
+
+                    return amiIds;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An error occurred: {ex.Message}");
+                    return new List<string>();
+                }
         }
         */
+        public static async Task<string> CreateKeyPairAsync(string region)
+        {
+            string keyPairName = "my-key-pair";
+            var ec2Client = new AmazonEC2Client(RegionEndpoint.GetBySystemName(region));
+
+            var request = new CreateKeyPairRequest
+            {
+                KeyName = keyPairName,
+            };
+
+            var response = await ec2Client.CreateKeyPairAsync(request);
+
+            Console.WriteLine($"Key pair '{keyPairName}' created");
+
+            return keyPairName;
+        }
+        
+        public static async Task DeleteKeyPairAsync(string keyPairName, AmazonEC2Client ec2Client)
+        {
+            var request = new DeleteKeyPairRequest
+            {
+                KeyName = keyPairName
+            };
+
+            await ec2Client.DeleteKeyPairAsync(request);
+
+            Console.WriteLine($"Key pair '{keyPairName}' has been deleted.");
+        }
+
+        public static async Task<string> GetAmiID(string region){
+            return region switch
+            {
+                "us-west-1" => "ami-0da424eb883458071",
+                "us-west-2" => "ami-04dd23e62ed049936",
+                "us-east-1" => "ami-0866a3c8686eaeeba",
+                "us-east-2" => "ami-0ea3c35c5c3284d82",
+                _=> throw new ArgumentException("Unsupported instance type.")
+            };
+        }
     }
 }
+
+

@@ -1,6 +1,6 @@
 {
-  "amiId": "ami-08012c0a9ee8e21c4",
   "totalInstances": 1,
-  "instanceType" : "t2.micro"
+  "instanceType" : "t2.small",
+  "region": "us-east-2"
 }
   
