@@ -59,7 +59,7 @@ namespace EC2SysbenchTest
             //var amiIds = await GetAmiIdsForOsAsync("ubuntu-24.04", region, ec2Client);
             //string amiId = amiIds[0];
 
-            Console.WriteLine(amiId);
+            Console.WriteLine($"[AWS] {amiId}");
     
             // 1. Launching the EC2 instance and obtaining instanceId
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances, instanceType);
@@ -150,7 +150,7 @@ namespace EC2SysbenchTest
 
             // 4. Terminate the instance and generated attributes
             await TerminateInstances(ec2Client, instanceIds);
-            Console.WriteLine("Waiting for instances to terminate...");
+            Console.WriteLine("[AWS] Waiting for instances to terminate...");
             await Task.Delay(90000);
             await DeleteSecurityGroup(ec2Client, securityGroupId);
             await DeleteKeyPairAsync(keyPair, ec2Client);
@@ -362,7 +362,7 @@ namespace EC2SysbenchTest
             var createResponse = await ec2Client.CreateSecurityGroupAsync(createRequest);
             string groupId = createResponse.GroupId;
 
-            Console.WriteLine($"Created security group with ID: {groupId}");
+            Console.WriteLine($"[AWS] Created security group with ID: {groupId}");
 
             // Step 2: Add Inbound Rule for SSH
             var ingressRequest = new AuthorizeSecurityGroupIngressRequest
@@ -406,7 +406,7 @@ namespace EC2SysbenchTest
                 };
 
                 await ec2Client.RevokeSecurityGroupIngressAsync(revokeRequest);
-                Console.WriteLine("Revoked SSH inbound rule from security group.");
+                Console.WriteLine("[AWS] Revoked SSH inbound rule from security group.");
 
                 // Step 2: Delete the security group
                 var deleteRequest = new DeleteSecurityGroupRequest
@@ -415,7 +415,7 @@ namespace EC2SysbenchTest
                 };
 
                 await ec2Client.DeleteSecurityGroupAsync(deleteRequest);
-                Console.WriteLine($"Security group with ID {groupId} has been deleted successfully.");
+                Console.WriteLine($"[AWS] Security group with ID {groupId} has been deleted successfully.");
             }
             catch (AmazonEC2Exception ex)
             {
@@ -506,7 +506,7 @@ namespace EC2SysbenchTest
 
             var response = await ec2Client.CreateKeyPairAsync(request);
 
-            Console.WriteLine($"Key pair '{keyPairName}' created");
+            Console.WriteLine($"[AWS] Key pair '{keyPairName}' created");
 
             return keyPairName;
         }
@@ -520,7 +520,7 @@ namespace EC2SysbenchTest
 
             await ec2Client.DeleteKeyPairAsync(request);
 
-            Console.WriteLine($"Key pair '{keyPairName}' has been deleted.");
+            Console.WriteLine($"[AWS] Key pair '{keyPairName}' has been deleted.");
         }
 
         public static async Task<string> GetAmiID(string region){

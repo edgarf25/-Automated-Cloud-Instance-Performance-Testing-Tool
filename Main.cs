@@ -32,12 +32,12 @@ public class UserInterface
                     string testType = "first time";
 
                     while(testType != "menu"){
-                        Console.WriteLine("Type 'normal' to run the normal performance tests, 'custom' to run custom tests, or 'menu' to return to main menu:");
+                        Console.WriteLine("Type 'standard' to run the normal performance tests, 'custom' to run custom tests, or 'menu' to return to main menu:");
                         Console.Write("> ");
                         testType = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
                             switch(testType)
                             {
-                                case "normal":
+                                case "standard":
                                     //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
                                     Task task1 = AWSProgram.AwsRun(args);
                                     //Task task2 = AZRunTests.Run(args);
@@ -187,7 +187,7 @@ public class UserInterface
 
                     break;
                 default:
-                    Console.WriteLine("Invalid command. Please enter 'run' 'credits' or 'exit'.");
+                    Console.WriteLine("Invalid command. Please enter 'run' 'setup' or 'exit'.");
                     break;
             }
         }
