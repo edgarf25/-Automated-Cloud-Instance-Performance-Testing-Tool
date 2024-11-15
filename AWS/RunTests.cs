@@ -26,28 +26,32 @@ namespace EC2SysbenchTest
 
         public static async Task AwsRun(string[] args)
         {
+            //Environment variables
+            //json config
             Env.Load();
-            // Loading configuration from JSON file
             string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "AWS" ,"config.json");
             Config config = LoadConfig(configFilePath);
 
-            string region = config.region;
-            var regionEndpoint = RegionEndpoint.GetBySystemName(region);
-            string amiId = await GetAmiID(region);
+
+            string region = config.region; //Saves region name as string
+            var regionEndpoint = RegionEndpoint.GetBySystemName(region);  //Saves region as RegionEndpoint
+            string amiId = GetAmiID(region);
             string keyPair = await CreateKeyPairAsync(region);
-            string iamRole = Environment.GetEnvironmentVariable("AWS_IAM_ROLE") ?? throw new InvalidOperationException("AWS_IAM_ROLE environment variable is not set."); //this
+            string iamRole = Environment.GetEnvironmentVariable("AWS_IAM_ROLE") ?? throw new InvalidOperationException("AWS_IAM_ROLE environment variable is not set.");
             string instanceType = config.instanceType;
             int totalInstances = config.totalInstances;
 
+            //Setting up connection with Database
             var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
+
             if (string.IsNullOrEmpty(connectionString))
             {
                 throw new InvalidOperationException("DB_CONNECTION_STRING environment variable is not set.");
             }
             
             var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
-
-            string filePath = Path.Combine("sysbench_outputs.txt");
+            
+            //Storing launched instance IDs
             List<string> instanceIds = new List<string>();
 
             // Region and EC2/SSM clients
@@ -56,8 +60,6 @@ namespace EC2SysbenchTest
             string vpcID = await GetVpcId(ec2Client, region);
             string subnetId = await GetSubnetId(ec2Client, vpcID);
             string securityGroupId = await CreateSecurityGroup(ec2Client, vpcID);
-            //var amiIds = await GetAmiIdsForOsAsync("ubuntu-24.04", region, ec2Client);
-            //string amiId = amiIds[0];
 
             Console.WriteLine($"[AWS] {amiId}");
     
@@ -65,21 +67,12 @@ namespace EC2SysbenchTest
             instanceIds = await LaunchInstance(ec2Client, amiId, securityGroupId, keyPair, subnetId, iamRole, totalInstances, instanceType);
 
             // 2. Giving time for the instances to be ready
-            Console.WriteLine($"Using VPC ID: {vpcID} and Subnet ID: {subnetId}");
+            Console.WriteLine($"[AWS] Using VPC ID: {vpcID} and Subnet ID: {subnetId}");
             await Task.Delay(15000);
             Console.WriteLine("[AWS] Waiting for the server to be ready...");
-            await Task.Delay(30000);  // 360000 for 6 mins (time needed for 5 instances to fully set up)
+            await Task.Delay(60000);              
             
-            // 3. Running sysbench tests on the instance through SSM
-            
-            /*
-            string command = "sudo apt-get update -y > /dev/null 2>&1 && sudo apt-get install -y sysbench > /dev/null 2>&1 && " +
-                             "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
-                             "sysbench --test=memory run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//' && " +
-                             "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'";
-            */
-            
-            
+            //Benchmarks to perform on instances
             string command = "sudo apt-get update > /dev/null 2>&1 && " +
                  "sudo apt-get install sysbench -y > /dev/null 2>&1 && " +
                  "cpu_time=$(sysbench cpu --cpu-max-prime=20000 --time=0 --events=2000 run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//') && " +
@@ -90,10 +83,9 @@ namespace EC2SysbenchTest
                  "echo $cpu_time && " +
                  "echo $memory_time && " +
                  "echo $fileio_time";
-            
-            
-            List<string> allOutputs = new List<string>();
-            
+                        
+
+            //Running command on each instance and sending data to Database.            
             foreach (var instanceId in instanceIds)
             {
                 Console.WriteLine($"[AWS] Checking if instance {instanceId} is ready for SSM commands...");
@@ -108,7 +100,6 @@ namespace EC2SysbenchTest
 
                 Console.WriteLine($"[AWS] Instance {instanceId} is ready. Running sysbench...");
 
-                // Run the command on this instance
                 string output = await RunCommandOnInstance(ssmClient, instanceId, command);
 
                 string[] results = output.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -139,14 +130,10 @@ namespace EC2SysbenchTest
                 Console.WriteLine($"[AWS] File I/O Time: {fileIOTime}");
                 Console.WriteLine($"[AWS] Total Time: {totalTime}");
 
-                allOutputs.Add($"Instance {instanceId} Output:\n{output}");
 
                 Console.WriteLine("[AWS] Waiting before moving to the next instance...");
                 await Task.Delay(5000);
             }
-
-                    
-            File.WriteAllLines(filePath, allOutputs);
 
             // 4. Terminate the instance and generated attributes
             await TerminateInstances(ec2Client, instanceIds);
@@ -156,6 +143,7 @@ namespace EC2SysbenchTest
             await DeleteKeyPairAsync(keyPair, ec2Client);
         }
 
+        //Reading json config
         static Config LoadConfig(string filePath)
         {
             if (!File.Exists(filePath))
@@ -172,7 +160,7 @@ namespace EC2SysbenchTest
             return config;
         }
 
-        static async Task<InstanceType> getInstanceType(string instanceTypeName)
+        static InstanceType getInstanceType(string instanceTypeName)
         {
             return instanceTypeName.ToLower() switch
             {
@@ -191,7 +179,7 @@ namespace EC2SysbenchTest
             var request = new RunInstancesRequest
             {
                 ImageId = amiId,
-                InstanceType = await getInstanceType(instanceTypeName),  // Instance type
+                InstanceType = getInstanceType(instanceTypeName),  // Instance type
                 MinCount = 1,
                 MaxCount = totalInstances,  // Number of instances to be launched
                 KeyName = keyPair,
@@ -269,14 +257,14 @@ namespace EC2SysbenchTest
 
         static async Task<string> WaitForCommandToComplete(IAmazonSimpleSystemsManagement ssmClient, string commandId, string instanceId)
         {
-            int delayBeforeFirstAttempt = 2000; // Delay in milliseconds (2 seconds)
-            int maxRetries = 30;   // Maximum number of retry attempts. Note: may not be needed anymore
-            int delayBetweenRetries = 5000; // Delay in milliseconds between retries (5 seconds)
+            int delayBeforeFirstAttempt = 2000; // Delay in milliseconds 
+            int maxRetries = 30;   // Maximum number of retry attempts.
+            int delayBetweenRetries = 2000; // Delay in milliseconds between retries
             int retryCount = 0;
 
             // Initial delay before first status check
             await Task.Delay(delayBeforeFirstAttempt);
-
+            Console.WriteLine("[AWS] Waiting for command to complete...");
             while (true)
             {
                 try
@@ -293,17 +281,15 @@ namespace EC2SysbenchTest
                     {
                         Console.WriteLine("[AWS] Command execution completed successfully.");
                         string output = response.StandardOutputContent;
-                        Console.WriteLine($"[AWS] Output:\n{output}");
-                        return output;  // Return the output
+                        return output;  
                     }
                     else if (response.Status == CommandInvocationStatus.Failed)
                     {
                         Console.WriteLine($"[AWS] Command failed: {response.StandardErrorContent}");
-                        return response.StandardErrorContent;  // Return the error output
+                        return response.StandardErrorContent;  
                     }
 
-                    Console.WriteLine("[AWS] Waiting for command to complete...");
-                    await Task.Delay(delayBetweenRetries); // Wait before checking again
+                    await Task.Delay(delayBetweenRetries); 
                 }
                 catch (Amazon.SimpleSystemsManagement.Model.InvocationDoesNotExistException)
                 {
@@ -351,12 +337,12 @@ namespace EC2SysbenchTest
 
         public static async Task<string> CreateSecurityGroup(AmazonEC2Client ec2Client, string vpcID)
         {
-            // Step 1: Create the security group
+            //Creating the security group
             var createRequest = new CreateSecurityGroupRequest
             {
-                GroupName = "MySecurityGroup", // Replace with your security group name
+                GroupName = "MySecurityGroup", 
                 Description = "Security group for SSH access",
-                VpcId = vpcID // Replace with your VPC ID
+                VpcId = vpcID 
             };
 
             var createResponse = await ec2Client.CreateSecurityGroupAsync(createRequest);
@@ -375,21 +361,26 @@ namespace EC2SysbenchTest
                         IpProtocol = "tcp",
                         FromPort = 22,   // SSH port
                         ToPort = 22,
-                        IpRanges = new List<string> { "13.52.6.112/32" } // Replace with your specific IP address
+                        Ipv4Ranges = new List<IpRange>
+                        {
+                            new IpRange
+                            {
+                                CidrIp = "13.52.6.112/32", // Replace with your specific IP address
+                            }
+                        }
                     }
                 }
             };
 
             await ec2Client.AuthorizeSecurityGroupIngressAsync(ingressRequest);
             return groupId;
-            //Console.WriteLine("Added SSH inbound rule to security group.");
         }
 
         public static async Task DeleteSecurityGroup(AmazonEC2Client ec2Client, string groupId)
         {
             try
             {
-                // Step 1: Revoke inbound rules (optional, but ensures the group can be deleted)
+                //Revoking inbound rules (optional, but ensures the group can be deleted)
                 var revokeRequest = new RevokeSecurityGroupIngressRequest
                 {
                     GroupId = groupId,
@@ -400,7 +391,13 @@ namespace EC2SysbenchTest
                             IpProtocol = "tcp",
                             FromPort = 22,
                             ToPort = 22,
-                            IpRanges = new List<string> { "13.52.6.112/32" } // Your specific IP range if necessary
+                            Ipv4Ranges = new List<IpRange>
+                            {
+                                new IpRange
+                                {
+                                    CidrIp = "13.52.6.112/32", // Replace with your specific IP address
+                                }
+                            }
                         }
                     }
                 };
@@ -408,7 +405,7 @@ namespace EC2SysbenchTest
                 await ec2Client.RevokeSecurityGroupIngressAsync(revokeRequest);
                 Console.WriteLine("[AWS] Revoked SSH inbound rule from security group.");
 
-                // Step 2: Delete the security group
+                //Deleting the security group
                 var deleteRequest = new DeleteSecurityGroupRequest
                 {
                     GroupId = groupId
@@ -423,6 +420,7 @@ namespace EC2SysbenchTest
             }
         }
 
+        //Obtain id of excisting VPC within the specified region
         public static async Task<string> GetVpcId(AmazonEC2Client ec2Client, string region)
         {
             var vpcResponse = await ec2Client.DescribeVpcsAsync(new DescribeVpcsRequest());
@@ -436,6 +434,7 @@ namespace EC2SysbenchTest
             return vpcId;
         }
 
+        //Obtain id of excisting subnet within the specified region
         public static async Task<string> GetSubnetId(AmazonEC2Client ec2Client, string vpcId)
         {
             var subnetResponse = await ec2Client.DescribeSubnetsAsync(new DescribeSubnetsRequest
@@ -459,41 +458,8 @@ namespace EC2SysbenchTest
 
             return subnetId;
         }   
-        /*
-        public static async Task<List<string>> GetAmiIdsForOsAsync(string osName, string region, AmazonEC2Client ec2Client)
-            {
-                try
-                {
-                    // Prepare the request to describe images
-                    var describeRequest = new DescribeImagesRequest
-                    {
-                        // Filter by the name of the AMI (adjust based on OS)
-                        Filters = new List<Filter>
-                        {
-                            new Filter("name", new List<string> { $"*{osName}*" })
-                        }
-                    };
 
-                    // Call DescribeImages API
-                    var describeResponse = await ec2Client.DescribeImagesAsync(describeRequest);
-
-                    List<string> amiIds = new List<string>();
-
-                    // Loop through the images to find AMI IDs that match the format
-                    foreach (var image in describeResponse.Images)
-                    {
-                        amiIds.Add(image.ImageId);
-                    }
-
-                    return amiIds;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An error occurred: {ex.Message}");
-                    return new List<string>();
-                }
-        }
-        */
+        //Creating keypair on specified region
         public static async Task<string> CreateKeyPairAsync(string region)
         {
             string keyPairName = "my-key-pair";
@@ -523,7 +489,8 @@ namespace EC2SysbenchTest
             Console.WriteLine($"[AWS] Key pair '{keyPairName}' has been deleted.");
         }
 
-        public static async Task<string> GetAmiID(string region){
+        //AMI IDs available per regions. Currently only US regions are supported
+        public static string GetAmiID(string region){
             return region switch
             {
                 "us-west-1" => "ami-0da424eb883458071",
