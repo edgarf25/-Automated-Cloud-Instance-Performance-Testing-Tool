@@ -9,7 +9,7 @@ public class UserInterface
 {
     public static async Task Main(string[] args)
     {
-        string[] customTests = new string[3];
+        string[] customTests = new string[3]; //stores the providers the user wants to run a custom test on
         Console.WriteLine("Welcome to our Cloud Testing Performance Tool!");
         Console.WriteLine("If this is your first time running this application, please type 'setup' to configure the application.");
      
@@ -38,41 +38,58 @@ public class UserInterface
                             switch(testType)
                             {
                                 case "standard":
-                                    //we might be able to run all these three programs in parallel for quicker test times especially since mine takes like 5 minutes
+                                    //Runnning the performance tests for AWS, Azure, and GCP in parallel
                                     Task task1 = AWSProgram.AwsRun(args);
-                                    //Task task2 = AZRunTests.Run(args);
-                                    //Task task3 = GCPRunTests.Run(args);
+                                    Task task2 = AZRunTests.Run(args);
+                                    Task task3 = GCPRunTests.Run(args);
 
                                     try
                                     {
                                         // Await all tasks to complete
-                                        //await Task.WhenAll(task1, task2, task3);
-                                        await Task.WhenAll(task1);
+                                        await Task.WhenAll(task1, task2, task3);
+                                        //await Task.WhenAll(task1);
                                         Console.WriteLine("All Performance tests have successfully run.");
                                     }
                                     catch (Exception ex)
                                     {
-                                        // Handle exceptions
                                         Console.WriteLine(ex);
                                     }     
                                     break;
                                 case "custom":
                                     Console.WriteLine("How many providers would you like to run a performance test on? one, two or three?(only AWS, Azure, and GCP are supported)");
-                                    Console.Write("> ");
-                                    string providerCount = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
                                     string? provider1 = null, provider2 = null, provider3 = null;
+                                    string providerCount;
+
+                                    while(true){
+                                        Console.Write("> ");
+                                        providerCount = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                        if (providerCount != "one" && providerCount != "two" && providerCount != "three" && providerCount != "1" && providerCount != "2" && providerCount != "3"){
+                                            Console.WriteLine("Invalid number of providers. Please enter 'one', 'two', or 'three'.");
+                                        }
+                                        else{
+                                            break;
+                                        } 
+                                    }
 
                                     switch(providerCount){
                                         case "one":
                                         case "1":
                                             Console.WriteLine("Enter the provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            while (true){
+                                                Console.Write("> ");
+                                                provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                                if (provider1 != "aws" && provider1 != "azure" && provider1 != "gcp"){
+                                                    Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                                }
+                                                else{
+                                                    break;
+                                                }
+                                            }
                                             customTests[0] = provider1;
-                                            Console.WriteLine("Running custom test for one provider");
+                                            Console.WriteLine($"Running custom test for {provider1}");
                                             await RunTests(customTests);
                                             Array.Fill(customTests, null);//resetting the array incase the user wants to run another test
-
+                                            
                                             // WILL ADD THIS IN UPCOMING UPDATES
                                             // Console.WriteLine("Enter the instance type you would like to test, e.g. t2.micro, Standard_B1s, f1-micro");
                                             // Console.Write("> ");
@@ -80,43 +97,95 @@ public class UserInterface
                                             // Console.WriteLine("Enter the region you would like to test, e.g. us-east-1, eastus, us-central1");
                                             // Console.Write("> ");
                                             // string region = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
-
-                                            
                                             break;
                                         case "two":
                                         case "2":
                                             Console.WriteLine("Enter the first provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            while(true){
+                                                Console.Write("> ");
+                                                provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                                if (provider1 != "aws" && provider1 != "azure" && provider1 != "gcp"){
+                                                    Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                                }
+                                                else{
+                                                    break;
+                                                }
+                                            }
                                             customTests[0] = provider1;
 
                                             Console.WriteLine("Enter the second provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider2 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            while(true){
+                                                Console.Write("> ");
+                                                provider2 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                                if (provider2 != "aws" && provider2 != "azure" && provider2 != "gcp"){
+                                                    Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                                }
+                                                else if(provider2 == provider1){
+                                                    Console.WriteLine("You have entered the same provider twice. Please enter a different provider.");
+                                                }
+                                                else{
+                                                    break;
+                                                }
+                                            }
                                             customTests[1] = provider2;
                                             
-                                            Console.WriteLine("Running custom test for two providers");
+                                            Console.WriteLine($"Running custom tests for {provider1}, and {provider2}");
                                             await RunTests(customTests);
                                             Array.Fill(customTests, null);//resetting the array incase the user wants to run another test
                                             break;
                                         case "three":
                                         case "3":
-                                            Console.WriteLine("Enter the first provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
-                                            customTests[0] = provider1;
-
-                                            Console.WriteLine("Enter the second provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider2 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
-                                            customTests[1] = provider2;
-
-                                            Console.WriteLine("Enter the third provider you would like to test: AWS, Azure, or GCP");
-                                            Console.Write("> ");
-                                            provider3 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
-                                            customTests[2] = provider3;
+                                            // WILL ADD THIS IN UPCOMING UPDATES
+                                            // Console.WriteLine("Enter the first provider you would like to test: AWS, Azure, or GCP");
+                                            // while(true){
+                                            //     Console.Write("> ");
+                                            //     provider1 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            //     if (provider1 != "aws" && provider1 != "azure" && provider1 != "gcp"){
+                                            //         Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                            //     }
+                                            //     else{
+                                            //         break;
+                                            //     }
+                                            // }
+                                            // customTests[0] = provider1;
                                             
-                                            Console.WriteLine("Running custom test for three providers");
+                                            // Console.WriteLine("Enter the second provider you would like to test: AWS, Azure, or GCP");
+                                            // while(true){
+                                            //     Console.Write("> ");
+                                            //     provider2 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            //     if (provider2 != "aws" && provider2 != "azure" && provider2 != "gcp"){
+                                            //         Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                            //     }
+                                            //     else if(provider2 == provider1){
+                                            //         Console.WriteLine("You have entered the same provider twice. Please enter a different provider.");
+                                            //     }
+                                            //     else{
+                                            //         break;
+                                            //     }
+                                            // }
+                                            // customTests[1] = provider2;
+                                            
+                                            // Console.WriteLine("Enter the third provider you would like to test: AWS, Azure, or GCP");
+                                            // while(true){
+                                            //     Console.Write("> ");
+                                            //     provider3 = (Console.ReadLine() ?? string.Empty).Trim().ToLower();
+                                            //     if (provider3 != "aws" && provider3 != "azure" && provider3 != "gcp"){
+                                            //         Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
+                                            //     }
+                                            //     else if(provider3 == provider1 || provider3 == provider2){
+                                            //         Console.WriteLine("You have entered the same provider twice. Please enter a different provider.");
+                                            //     }
+                                            //     else{
+                                            //         break;
+                                            //     }
+                                            // }
+                                            // customTests[2] = provider3;
+
+                                            customTests[0] = "aws";
+                                            customTests[1] = "azure";
+                                            customTests[2] = "gcp";
+
+                                            Console.WriteLine($"Running custom test for {provider1}, {provider2}, and {provider3}");
                                             await RunTests(customTests);
                                             Array.Fill(customTests, null);//resetting the array incase the user wants to run another test
                                             break;
@@ -129,7 +198,7 @@ public class UserInterface
                                     Console.WriteLine("Returning to main menu.");
                                     break;
                                 default:
-                                    Console.WriteLine("Invalid command. Please enter 'normal', 'menu' or 'custom'.");
+                                    Console.WriteLine("Invalid command. Please enter 'standard', 'menu' or 'custom'.");
                                     break;
                             }
                     }
@@ -148,12 +217,6 @@ public class UserInterface
                     string azSubscriptionID = Console.ReadLine() ?? string.Empty;
 
                     Console.Write("\nAWS:\n");
-                    Console.Write("Enter Security Group ID: ");
-                    string awsSecGroupID = Console.ReadLine() ?? string.Empty;
-                    Console.Write("Enter key-pair name: ");
-                    string awsKeyPair = Console.ReadLine() ?? string.Empty;
-                    Console.Write("Enter Subnet ID: ");
-                    string awsSubnetID = Console.ReadLine() ?? string.Empty;
                     Console.Write("Enter IAM Role Name: ");
                     string awsIAMRole = Console.ReadLine() ?? string.Empty;
 
@@ -173,9 +236,6 @@ public class UserInterface
                         $"AZURE_CLIENT_ID = {azClientID}",
                         $"AZURE_CLIENT_SECRET = {azClientSecret}",
                         $"AZURE_SUBSCRIPTION_ID = {azSubscriptionID}",
-                        $"AWS_SECURITY_GROUP_ID = {awsSecGroupID}",
-                        $"AWS_KEY_PAIR_NAME = {awsKeyPair}",
-                        $"AWS_SUBNET_ID = {awsSubnetID}",
                         $"AWS_IAM_ROLE = {awsIAMRole}",
                         $"DB_CONNECTION_STRING = {dbConnectionString}",
                         $"PROJECT_ID = {gcpProjectID}",
@@ -197,7 +257,6 @@ public class UserInterface
     {
         int nonNullCount = providers.Count(value => value != null);
         Console.WriteLine($"Running performance tests for {nonNullCount} provider(s).");
-
         if (nonNullCount == 1)
         {
             // Single provider case
@@ -218,7 +277,7 @@ public class UserInterface
                 Console.WriteLine("Invalid provider. Please enter 'AWS', 'Azure', or 'GCP'.");
             }
         }
-        else if (nonNullCount == 2) //ADD HOW TO HANDLE IF USER ENTERS THE SAME PROVIDER TWICE
+        else if (nonNullCount == 2)
         {
             Task? taskAWS = null, taskAZ = null, taskGCP = null;
 
@@ -247,7 +306,7 @@ public class UserInterface
                 Console.WriteLine("Invalid providers. Please enter 'AWS', 'Azure', or 'GCP'.");
             }
         }
-        else //ADD HOW TO HANDLE IF USER ENTERS THE SAME PROVIDER THREEE TIMES
+        else // Runs all providers
         {
             Task? taskAWS = AWSProgram.AwsRun(providers);
             Task? taskAZ = AZRunTests.Run(providers);
