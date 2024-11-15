@@ -168,6 +168,9 @@ namespace EC2SysbenchTest
                 "t2.micro" => InstanceType.T2Micro,
                 "t2.small" => InstanceType.T2Small,
                 "t2.medium" => InstanceType.T2Medium,
+                "t2.xlarge" => InstanceType.T2Xlarge,
+                "t3.2xlarge" => InstanceType.T32Xlarge,
+
                 _=> throw new ArgumentException("Unsupported instance type.")
             };
         }

@@ -40,13 +40,13 @@ public class UserInterface
                                 case "standard":
                                     //Runnning the performance tests for AWS, Azure, and GCP in parallel
                                     Task task1 = AWSProgram.AwsRun(args);
-                                    Task task2 = AZRunTests.Run(args);
-                                    Task task3 = GCPRunTests.Run(args);
+                                    //Task task2 = AZRunTests.Run(args);
+                                    //Task task3 = GCPRunTests.Run(args);
 
                                     try
                                     {
                                         // Await all tasks to complete
-                                        await Task.WhenAll(task1, task2, task3);
+                                        await Task.WhenAll(task1);
                                         //await Task.WhenAll(task1);
                                         Console.WriteLine("All Performance tests have successfully run.");
                                     }
