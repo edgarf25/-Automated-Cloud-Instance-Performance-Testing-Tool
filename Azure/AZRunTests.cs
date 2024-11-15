@@ -19,14 +19,14 @@ namespace AZInstanceManager{
         {
             Env.Load(); // Load the .env file
 
-            // Replace with your Azure subscription ID
+            // Grabs subscription ID from the environment variables
             string subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID") ?? throw new InvalidOperationException("AZURE_SUBSCRIPTION_ID environment variable is not set.");
 
-            // Getting the access token once
+            // Getting the access token once 
             string accessToken = await TokenService.GetAccessTokenAsync();
             var tokenCredentials = new TokenCredentials(accessToken);
 
-            // Read and parse the JSON configuration file
+            // Reads and parses the JSON configuration file
             string configFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Azure" ,"vmConfigurations.json");
             var vmConfigurations = await LoadVmConfigurationsAsync(configFilePath);
 
@@ -111,6 +111,7 @@ namespace AZInstanceManager{
         // Function to create and manage the VM using the selected configuration
         private static async Task CreateAndManageVmAsync(VmConfiguration vmConfig, TokenCredentials tokenCredentials, string subscriptionId)
         {
+            // Create the components that are needed to manage the create and manage the VM
             var resourceClient = new ResourceManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
             var networkClient = new NetworkManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
             var computeClient = new ComputeManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
@@ -227,11 +228,12 @@ namespace AZInstanceManager{
                 },
                 StorageProfile = new StorageProfile
                 {
+                    // Sets the version of Linux to Ubuntu 20.04 LTS
                     ImageReference = new ImageReference
                     {
                         Publisher = "Canonical",
                         Offer = "UbuntuServer",
-                        Sku = "18.04-LTS",
+                        Sku = "20.04-LTS",
                         Version = "latest"
                     },
                     OsDisk = new OSDisk
@@ -246,7 +248,7 @@ namespace AZInstanceManager{
             return await computeClient.VirtualMachines.CreateOrUpdateAsync(vmConfig.ResourceGroupName, vmConfig.Name, vmParams);
         }
 
-        // Function to wait for VM provisioning
+        // Function to wait for VM provisioning(checks if the VM is ready to run commands)
         private static async Task WaitForVmProvisioningAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName)
         {
             VirtualMachine vm;
@@ -258,11 +260,11 @@ namespace AZInstanceManager{
                 {
                     break;
                 }
-                await Task.Delay(5000); // Wait for 5 seconds before checking again
+                await Task.Delay(2500); // Wait for 2.5 seconds before checking again
             } while (true);
         }
 
-        // Function to run commands on the VM
+        // Function to run the specified commands on the VM
         private static async Task<string> RunCommandOnVmAsync(ComputeManagementClient computeClient, string resourceGroupName, string vmName, VmConfiguration vmConfig)
         {
             Console.WriteLine("[AZURE] Running Tests on VM...");
@@ -289,7 +291,8 @@ namespace AZInstanceManager{
                 var result = await computeClient.VirtualMachines.RunCommandAsync(resourceGroupName, vmName, runCommandParams);
 
                 Console.WriteLine("[AZURE] Successfully ran commands on VM");
-
+                
+                //Values are returned in unparsed form so we need to parse them
                 if (result.Value != null && result.Value.Count > 0)
                 {
                     var output = result.Value[0].Message;
@@ -324,6 +327,7 @@ namespace AZInstanceManager{
                         double totalTime = totalTimes.Sum();
 
                         //Adding the data to MongoDB
+                        //checks that we have a valid connection string
                         var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING");
                         if (string.IsNullOrEmpty(connectionString))
                         {
@@ -331,6 +335,7 @@ namespace AZInstanceManager{
                         }
                         var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData");
 
+                        //data to be inserted into the database
                         var data = new CloudPerformanceData
                         {
                             Provider = "Azure",
@@ -340,7 +345,7 @@ namespace AZInstanceManager{
                             Memory = totalTimes[1].ToString(),
                             Disk = totalTimes[2].ToString(),
                             totalTime = totalTime.ToString(),
-                            Os = "Ubuntu 18.04",
+                            Os = "Ubuntu 20.04",
                             Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                         };
 
@@ -395,7 +400,7 @@ namespace AZInstanceManager{
             // Delete disk
             await DeleteDiskAsync(computeClient, vmConfig.ResourceGroupName, vmConfig.OsDiskName);
 
-            // Optionally, delete the resource group
+            // Delete the resource group
             await DeleteResourceGroupAsync(resourceClient, vmConfig.ResourceGroupName);
         }
 

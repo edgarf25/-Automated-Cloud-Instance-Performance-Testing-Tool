@@ -11,7 +11,7 @@ class TokenService
         // Load the .env file at the beginning of the method
         Env.Load();
 
-        Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_TENANT_ID"));
+        Console.WriteLine("[AZURE] " + Environment.GetEnvironmentVariable("AZURE_TENANT_ID"));
 
         // Retrieve the environment variables
         string tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID") ?? throw new InvalidOperationException("AZURE_TENANT_ID environment variable is not set.");
