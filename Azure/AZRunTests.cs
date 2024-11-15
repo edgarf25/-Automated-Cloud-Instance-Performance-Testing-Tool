@@ -232,8 +232,8 @@ namespace AZInstanceManager{
                     ImageReference = new ImageReference
                     {
                         Publisher = "Canonical",
-                        Offer = "UbuntuServer",
-                        Sku = "20.04-LTS",
+                        Offer = "ubuntu-24_04-lts",
+                        Sku = "server",
                         Version = "latest"
                     },
                     OsDisk = new OSDisk
@@ -345,7 +345,7 @@ namespace AZInstanceManager{
                             Memory = totalTimes[1].ToString(),
                             Disk = totalTimes[2].ToString(),
                             totalTime = totalTime.ToString(),
-                            Os = "Ubuntu 20.04",
+                            Os = "Ubuntu 24.04",
                             Date = DateTime.Now.ToString("MM-dd-yyyy HH:mm:ss")
                         };
 
