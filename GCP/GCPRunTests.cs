@@ -12,7 +12,7 @@ namespace GCPInstanceManager{
     class GCPRunTests{
         public class Config
         {
-            public string zone { get; set; }
+            public required string zone { get; set; }
             public required string machineType { get; set; }
             public int numInstances { get; set; }
         }
@@ -38,17 +38,6 @@ namespace GCPInstanceManager{
             }
         
             var cloudPerformanceData = new MongoDbService(connectionString, "CloudPerformanceData", "CloudPerformanceData"); 
-
-            /* //Quicker command set to execute (testing purposes)
-            string[] commands = new string[]
-            {
-                "sudo apt-get update -y > /dev/null 2>&1",
-                "sudo apt-get install -y sysbench > /dev/null 2>&1",
-                "sysbench --test=cpu run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'",
-                "sysbench --test=memory run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'",
-                "sysbench --test=fileio --file-test-mode=seqwr run 2>/dev/null | grep 'total time:' | awk '{print $3}' | sed 's/s//'"
-            };
-            */
             
             string[] commands = new string[]
             {
@@ -120,6 +109,7 @@ namespace GCPInstanceManager{
             }
         }
 
+        //Executing commands on instances
         static async Task<string> ExecuteCommandAsync(string commandToExecute, string instanceName, string zone)
         {
             var arguments = $"compute ssh {instanceName} --tunnel-through-iap --command \"{commandToExecute}\" --zone {zone}";
@@ -172,7 +162,6 @@ namespace GCPInstanceManager{
 
             return string.Join("\n", outputLines);                            
         }
-
 
         static Config LoadConfig(string filePath)
         {
@@ -256,7 +245,7 @@ namespace GCPInstanceManager{
                 await CreateInstanceAsync(machineName: machineName, projectId: projectId, machineType: machineType, zone: zone);
             }
         }
-
+        
         public static async Task DeleteInstanceAsync(string projectId, string zone, string machineName)
         {
             InstancesClient client = await InstancesClient.CreateAsync();
