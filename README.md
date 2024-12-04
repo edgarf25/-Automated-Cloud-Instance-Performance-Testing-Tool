@@ -4,6 +4,11 @@
 
 The **Cloud Instance Performance Testing Tool** is an automation tool designed to simplify the process of comparing and testing virtual machines (VMs) across multiple cloud providers (AWS, Azure, and GCP). This project addresses the challenges of navigating cloud provider interfaces and comparing instance types by offering a streamlined solution for performance testing and analysis.
 
+## Website
+
+Custom website that displays generated performance data:  
+[https://cloudmeter-gxgfdjdcc8e3gwfz.eastus-01.azurewebsites.net/](https://cloudmeter-gxgfdjdcc8e3gwfz.eastus-01.azurewebsites.net/)
+
 ## Features
 
 - **Multi-Cloud Support**: Automates the creation and performance testing of VMs on AWS, Azure, and GCP.
