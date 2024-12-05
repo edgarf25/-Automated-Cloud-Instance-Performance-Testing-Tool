@@ -9,8 +9,16 @@ public class UserInterface
 {
     public static async Task Main(string[] args)
     {
+        string logo = @"
+   ________                ____  ___     __           
+  / ____/ /___  __  ______/ /  |/  /__  / /____  _____
+ / /   / / __ \/ / / / __  / /|_/ / _ \/ __/ _ \/ ___/
+/ /___/ / /_/ / /_/ / /_/ / /  / /  __/ /_/  __/ /    
+\____/_/\____/\__,_/\__,_/_/  /_/\___/\__/\___/_/     
+         ";
         string[] customTests = new string[3]; //stores the providers the user wants to run a custom test on
-        Console.WriteLine("Welcome to our Cloud Testing Performance Tool!");
+        Console.WriteLine(logo);
+        Console.WriteLine("Welcome to Cloud Meter, a Cloud Testing Performance Tool!");
         Console.WriteLine("If this is your first time running this application, please type 'setup' to configure the application.");
      
 
@@ -40,13 +48,13 @@ public class UserInterface
                                 case "standard":
                                     //Runnning the performance tests for AWS, Azure, and GCP in parallel
                                     Task task1 = AWSProgram.AwsRun(args);
-                                    //Task task2 = AZRunTests.Run(args);
-                                    //Task task3 = GCPRunTests.Run(args);
+                                    Task task2 = AZRunTests.Run(args);
+                                    Task task3 = GCPRunTests.Run(args);
 
                                     try
                                     {
                                         // Await all tasks to complete
-                                        await Task.WhenAll(task1);
+                                        await Task.WhenAll(task1, task2, task3);
                                         //await Task.WhenAll(task1);
                                         Console.WriteLine("All Performance tests have successfully run.");
                                     }

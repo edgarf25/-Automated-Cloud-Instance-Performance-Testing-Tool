@@ -1,6 +1,6 @@
 {
-  "totalInstances": 5,
-  "instanceType" : "t2.small",
-  "region": "us-east-2"
+  "totalInstances": 1,
+  "instanceType" : "t2.medium",
+  "region": "us-west-1"
 }
   

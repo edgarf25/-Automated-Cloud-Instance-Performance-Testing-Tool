@@ -1,22 +1,22 @@
 {
     "vms": [
-      {
-        "name": "myVM1",
-        "resourceGroupName": "myResourceGroupAutomation",
-        "location": "eastus2",
-        "vmSize": "Standard_B1s", 
-        "adminUsername": "azureuser",
-        "adminPassword": "P@ssw0rd1234",
-        "network": {
-          "virtualNetworkName": "myVNet1",
-          "subnetName": "mySubnet1",
-          "addressPrefix": "10.0.0.0/16",
-          "subnetPrefix": "10.0.0.0/24"
-        },
-        "publicIpName": "myPublicIP1",
-        "networkInterfaceName": "myNIC1",
-        "osDiskName": "myOsDisk1"
-      }
+          {
+            "name": "myVM1",
+            "resourceGroupName": "myResourceGroupAutomation",
+            "location": "westus",
+            "vmSize": "Standard_B2s", 
+            "adminUsername": "azureuser",
+            "adminPassword": "P@ssw0rd1234",
+            "network": {
+              "virtualNetworkName": "myVNet1",
+              "subnetName": "mySubnet1",
+              "addressPrefix": "10.0.0.0/16",
+              "subnetPrefix": "10.0.0.0/24"
+            },
+            "publicIpName": "myPublicIP1",
+            "networkInterfaceName": "myNIC1",
+            "osDiskName": "myOsDisk1"
+          }
     ]
   }
   

@@ -1,5 +1,5 @@
 {
     "numInstances": 1,
     "zone": "us-west1-b",
-    "machineType": "e2-micro"
+    "machineType": "e2-medium"
 }
